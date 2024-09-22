@@ -1,5 +1,4 @@
-# tp1-distribuidos
-
+# Trabajo Practico Sistemas Distribuidos
 TP 1 - Sistemas Distribuídos FIUBA 2024 2C
 
 | Nombre           | Padrón | Email                |
