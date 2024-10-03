@@ -8,8 +8,5 @@ TP 1 - Sistemas Distribuídos FIUBA 2024 2C
 | Luciano Lorenzo  | 108951 | llorenzo@fi.uba.ar  |
 
 ## Introduccion
-## Vista Fisica
-## Vista de Procesos
-## Vista de Desarrollo
-### Diagrama de Paquetes
-## DAG
+
+Informe: https://www.overleaf.com/project/66f0a67b1e7963272bb845d9
