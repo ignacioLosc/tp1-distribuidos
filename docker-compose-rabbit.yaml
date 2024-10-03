@@ -1,0 +1,16 @@
+name: rabbit_tp1
+services:
+  rabbit:
+    image: rabbitmq:3.9.16-management-alpine
+    ports:
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - testing_net_tp1
+
+networks:
+  testing_net_tp1:
+    external: true
+    name: testing_net_tp1
