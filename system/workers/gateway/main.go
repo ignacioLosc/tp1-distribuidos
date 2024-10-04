@@ -1,36 +1,88 @@
 package main
 
 import (
-	"example.com/system/communication/middleware"
-    zmq "github.com/pebbe/zmq4"
-    "fmt"
-    "time"
+	"fmt"
+	"os"
+	"strings"
+
+	"example.com/system/workers/gateway/common"
+	"github.com/op/go-logging"
+	"github.com/spf13/viper"
 )
 
-func main() {
-	middleware.ConnectToRabbitMQ()
-    
-    responder , _ := zmq.NewSocket(zmq.REP)
-    defer responder.Close()
+var log = logging.MustGetLogger("log")
 
-    err := responder.Bind("tcp://*:5555")
-    if err != nil {
-        fmt.Println("socket blew up or smth")
-        return
+func InitConfig() (*viper.Viper, error) {
+    v := viper.New()
+
+    //Configure viper to read env variables with the CLI_ prefix
+    v.AutomaticEnv()
+    v.SetEnvPrefix("cli")
+
+    v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+    // Add env variables supported
+    v.BindEnv("server", "port")
+    v.BindEnv("log", "level")
+
+    // Tries to read config or check envs
+    v.SetConfigFile("./config.yaml")
+    if err := v.ReadInConfig(); err != nil {
+        fmt.Printf("Configuration could not be read from config.file. using env variables instead")
     }
 
-    fmt.Printf("Starting to receive Packages")
-    for {
-        // Wait for the request from the client
-        msg, _ := responder.Recv(0)
-        fmt.Println("Received ", msg)
-
-        // Do some work
-        time.Sleep(time.Second)
-
-        //Send reply back
-        reply := "World"
-        responder.Send(reply, 0)
-        fmt.Println("Sent ", reply)
-    }
+    return v,nil
 }
+func InitLogger(logLevel string) error {
+	baseBackend := logging.NewLogBackend(os.Stdout, "", 0)
+	format := logging.MustStringFormatter(
+		`%{time:2006-01-02 15:04:05} %{level:.5s}     %{message}`,
+	)
+	backendFormatter := logging.NewBackendFormatter(baseBackend, format)
+
+	backendLeveled := logging.AddModuleLevel(backendFormatter)
+	logLevelCode, err := logging.LogLevel(logLevel)
+	if err != nil {
+		return err
+	}
+	backendLeveled.SetLevel(logLevelCode, "")
+
+	// Set the backends to be used.
+	logging.SetBackend(backendLeveled)
+	return nil
+}
+
+func PrintConfig(v *viper.Viper) {
+    log.Infof("action: config | result: sucess | server_port: %s | log_level: %s",
+            v.GetString("server.port"),
+            v.GetString("log.level"),
+    )
+}
+
+
+func main() {
+    v , err := InitConfig()
+    if err != nil {
+        log.Criticalf("%s", err)
+    }
+
+    if err := InitLogger(v.GetString("log.level")); err != nil {
+        log.Criticalf("%s", err)
+    }
+
+    PrintConfig(v)
+
+    config := common.ServerConfig{
+        ServerPort: v.GetString("server.port"),
+    }
+    server , err := common.NewServer(config)
+
+    if err != nil {
+        log.Critical("action: bind server | result: fail | err: %s", err)
+    }
+
+    server.Start()
+
+
+}
+
