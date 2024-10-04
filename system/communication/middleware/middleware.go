@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"fmt"
-//	"log"
+    "log"
 
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -10,13 +10,16 @@ import (
 
 func failOnError(err error, msg string) {
 	if err != nil {
-		// log.Panicf("%s: %s", msg, err)
+		log.Panicf("%s: %s", msg, err)
 	}
 }
 
 func ConnectToRabbitMQ() {
 	fmt.Println("Connecting to Rabbitmq")
-	_, err := amqp.Dial("amqp://guest:guest@rabbit:5672/")
+	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
-    fmt.Println("I've finished doing middleware stuff")
+    defer conn.Close()
+    fmt.Println("Connected to RabbitMQ")
 }
+
+

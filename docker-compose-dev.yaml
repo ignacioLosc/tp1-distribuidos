@@ -1,4 +1,4 @@
-name: system_tp1
+name: _tp1
 services:
   gateway:
     container_name: gateway
@@ -6,6 +6,16 @@ services:
     entrypoint: /gateway
     networks:
       - testing_net_tp1
+
+  client:
+    container_name: client
+    image:  client:latest
+    entrypoint: /client
+    depends_on: 
+      - gateway
+    networks:
+      - testing_net_tp1
+
 
 
 networks:

@@ -1,8 +1,10 @@
 name: rabbit_tp1
 services:
-  rabbit:
+  rabbitmq:
+    container_name: rabbitmq
     image: rabbitmq:3.9.16-management-alpine
     ports:
+      - "5672:5672"
       - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
