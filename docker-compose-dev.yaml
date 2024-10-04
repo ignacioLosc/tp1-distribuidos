@@ -2,7 +2,8 @@ name: system_tp1
 services:
   gateway:
     container_name: gateway
-    build: ./system/workers/gateway
+    image: gateway:latest
+    entrypoint: /gateway
     networks:
       - testing_net_tp1
 

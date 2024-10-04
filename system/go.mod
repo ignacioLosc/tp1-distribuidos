@@ -1,4 +1,4 @@
-module system
+module example.com/system
 
 go 1.23
 

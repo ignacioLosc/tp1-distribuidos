@@ -1,11 +1,23 @@
-system-up: 
+
+create_base_images:
+	docker build -f base-images/ZQ-ready-builder.dockerfile -t golang_zq:1.0 .
+	docker build -f base-images/ZQ-ready-run.dockerfile -t debian_zq:1.0 .
+.PHONY: basic_images
+
+remove_old : 
+	docker rmi `docker images --filter label=intermediateStageToBeDeleted=true -q`
+
+create_images: create_base_images
+	docker build -f system/workers/gateway/Dockerfile -t gateway:latest system/
+
+system-up: create_images
 	docker compose -f docker-compose-dev.yaml up -d --build
-.PHONY: docker-system-up
+.PHONY: system-up
 
 system-down:
 	docker compose -f docker-compose-dev.yaml stop -t 3
 	docker compose -f docker-compose-dev.yaml down
-.PHONY: docker-system-down
+.PHONY: system-down
 
 network-create:
 	docker network create --subnet 172.255.125.0/24 testing_net_tp1
@@ -17,9 +29,9 @@ network-remove:
 
 rabbit-up:
 	docker compose -f docker-compose-rabbit.yaml up -d --build
-.PHONY: docker-rabbit-up
+.PHONY: rabbit-up
 
 rabbit-down:
 	docker compose -f docker-compose-rabbit.yaml stop -t 10
 	docker compose -f docker-compose-rabbit.yaml down
-.PHONY: docker-rabbit-down
+.PHONY: rabbit-down
