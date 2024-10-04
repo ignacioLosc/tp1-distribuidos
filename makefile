@@ -1,13 +1,15 @@
 
 create_base_images:
-	docker build -f base-images/ZQ-ready-builder.dockerfile -t golang_zq:1.0 .
+	docker build -f base-images/go-system.dockerfile -t golang-rabbit:1.0 system/
+	docker build -f base-images/ZQ_client_golang.dockerfile -t golang_client:1.0 .
+	docker build -f base-images/ZQ_system_golang.dockerfile -t golang_system_zq:1.0 .
 	docker build -f base-images/ZQ-ready-run.dockerfile -t debian_zq:1.0 .
 .PHONY: basic_images
 
 remove_old : 
 	docker rmi `docker images --filter label=intermediateStageToBeDeleted=true -q`
 
-create_images: create_base_images
+create_images: 
 	docker build -f system/workers/gateway/Dockerfile -t gateway:latest system/
 
 system-up: create_images
