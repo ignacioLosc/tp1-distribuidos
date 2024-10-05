@@ -1,0 +1,7 @@
+
+server:
+    port: "5672"
+log:
+    level: "INFO"
+
+

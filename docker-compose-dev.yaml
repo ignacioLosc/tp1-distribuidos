@@ -7,6 +7,13 @@ services:
     networks:
       - testing_net_tp1
 
+  input_controller:
+    container_name: input_controller
+    image: input_controller:latest
+    entrypoint: /input_controller
+    networks:
+      - testing_net_tp1
+
   client:
     container_name: client
     image:  client:latest

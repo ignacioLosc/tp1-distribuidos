@@ -11,6 +11,7 @@ import (
 	"github.com/op/go-logging"
 	"github.com/pebbe/zmq4"
 	zmq "github.com/pebbe/zmq4"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 var log = logging.MustGetLogger("log")
@@ -44,6 +45,52 @@ func NewServer(config ServerConfig) (*Server, error) {
 	return server, nil
 }
 
+func (s *Server) CreateRabbitQueue() (*amqp.Connection, amqp.Queue, *amqp.Channel) {
+	// Connect to RabbitMQ
+	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
+	if err != nil {
+		log.Fatalf("Failed to connect to RabbitMQ: %s", err)
+	}
+
+	// Create a channel
+	ch, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("Failed to create channel: %s", err)
+	}
+	// Declare the queue
+	q, err := ch.QueueDeclare(
+		"games",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("Failed to declare queue: %s", err)
+	}
+	return conn, q, ch
+}
+
+func (s *Server) PublishNewGames(msg string, ch *amqp.Channel, q *amqp.Queue) {
+	// Publish a message
+	body := []byte(msg)
+	err := ch.Publish(
+		"",
+		q.Name,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        body,
+		},
+	)
+	if err != nil {
+		log.Errorf("Failed to publish message: %s", err)
+	}
+	log.Infof("Message sent successfully!")
+}
+
 func (s *Server) Start() {
 	defer s.responder.Close()
 
@@ -62,6 +109,18 @@ func (s *Server) Start() {
 		cancel()
 	}()
 
+	chGames := make(chan string, 1)
+
+	conn, q, ch := s.CreateRabbitQueue()
+	defer conn.Close()
+	defer ch.Close()
+
+	go func() {
+		for game := range chGames {
+			s.PublishNewGames(game, ch, &q)
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -75,6 +134,8 @@ func (s *Server) Start() {
 				return
 			}
 			fmt.Println("Received ", msg)
+
+			chGames <- msg
 
 			reply := "World"
 			s.responder.Send(reply, 0)
