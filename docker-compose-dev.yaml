@@ -1,0 +1,36 @@
+name: tp1
+services:
+  gateway:
+    container_name: gateway
+    image: gateway:latest
+    entrypoint: /gateway
+    networks:
+      - testing_net_tp1
+
+  client:
+    container_name: client
+    image:  client:latest
+    entrypoint: /client
+    volumes:
+      - ./.data/games.csv:/games.csv
+    depends_on: 
+      - gateway
+    networks:
+      - testing_net_tp1
+
+
+
+networks:
+  testing_net_tp1:
+    external: true
+    name: testing_net_tp1
+
+
+
+
+
+
+
+
+
+

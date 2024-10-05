@@ -1,0 +1,6 @@
+server:
+    address: "gateway:5555"
+log:
+    level: "INFO"
+data_path:
+    path: ".data"
