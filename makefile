@@ -13,7 +13,7 @@ create_images:
 	docker build -f system/workers/gateway/Dockerfile -t gateway:latest system/
 	docker build -f client/Dockerfile -t client:latest client/
 
-system-up: create_images
+system-up: create_base_images create_images network-create
 	docker compose -f docker-compose-dev.yaml up -d --build
 .PHONY: system-up
 
@@ -24,7 +24,7 @@ system-down:
 .PHONY: system-down
 
 network-create:
-	docker network create --subnet 172.255.125.0/24 testing_net_tp1
+	docker network inspect testing_net_tp1 >/dev/null 2>&1 || docker network create --subnet 172.255.125.0/24 testing_net_tp1
 .PHONY: network-create
 
 logs :
