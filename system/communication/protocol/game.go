@@ -80,7 +80,7 @@ func SerializeGame(game *Game) []byte {
 	return bytes
 }
 
-func DeserializeGame(bytes []byte) (Game, error) {
+func DeserializeGame(bytes []byte) (Game, error, int) {
 	index := 0
 
 	appIdLen := uint64(bytes[index])
@@ -122,5 +122,5 @@ func DeserializeGame(bytes []byte) (Game, error) {
 		WindowsCompatible:     windowsCompatible,
 		MacCompatible:         macCompatible,
 		LinuxCompatible:       linuxCompatible,
-	}, nil
+	}, nil, index
 }

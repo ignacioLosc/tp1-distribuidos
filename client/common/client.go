@@ -51,7 +51,7 @@ func (c *Client) sendCSV(fileReader *bufio.Reader) error {
 	}
 
 	var batch []string
-	batchSize := 1000
+	batchSize := 10
 
 	for {
 		for len(batch) < batchSize {
@@ -81,7 +81,8 @@ func (c *Client) sendCSV(fileReader *bufio.Reader) error {
 
 			batch = append(batch, line)
 
-			MaxBufferSize := 65536
+			// MaxBufferSize := 65536
+			MaxBufferSize := 500
 			if len(strings.Join(batch, "\n")) >= MaxBufferSize {
 				break
 			}

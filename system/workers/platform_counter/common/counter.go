@@ -2,11 +2,13 @@ package common
 
 import (
 	"context"
+	"encoding/binary"
 	"os"
 	"os/signal"
 	"syscall"
 
 	mw "example.com/system/communication/middleware"
+	"example.com/system/communication/protocol"
 	prot "example.com/system/communication/protocol"
 	"github.com/op/go-logging"
 )
@@ -99,10 +101,8 @@ func (p *PlatformCounter) Start() {
 			}
 			p.count = prot.PlatformCount{}
 		}
-
 	}
 }
-
 
 func (p *PlatformCounter) countgames(msg []byte) error {
 		if string(msg) == "EOF" {
@@ -111,16 +111,30 @@ func (p *PlatformCounter) countgames(msg []byte) error {
 			return nil
 		}
 
-		game, err := prot.DeserializeGame(msg)
-		if err != nil {
-			return err
+		log.Infof("Received message. Starting to count")
+		lenGames := binary.BigEndian.Uint64(msg[:8])
+		games := make([]protocol.Game, 0)
+
+		index := 8
+		for i := 0; i < int(lenGames); i++ {
+			game, err, j := protocol.DeserializeGame(msg[index:])
+
+			if err != nil {
+				log.Errorf("Failed to deserialize game: %s", err)
+				continue
+			}
+
+			games = append(games, game)
+			index += j
 		}
 
-		p.count.Increment(game.WindowsCompatible, game.LinuxCompatible, game.MacCompatible)
+		for _, game := range games {
+			p.count.Increment(game.WindowsCompatible, game.LinuxCompatible, game.MacCompatible)
+		}
 
 		log.Info("Counter: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
 
-		return err
+		return nil
 }
 
 

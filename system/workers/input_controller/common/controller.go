@@ -1,12 +1,14 @@
 package common
 
 import (
-	"encoding/csv"
 	"context"
+	"encoding/binary"
+	"encoding/csv"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+
 	"example.com/system/communication/middleware"
 	"example.com/system/communication/protocol"
 	"github.com/op/go-logging"
@@ -94,30 +96,34 @@ func (c *Controller) processGame(msg []byte) error {
 
 	log.Info("Input controller. Parsed records from CSV: ", len(records))
 
+	gamesBuffer := make([]byte, 8)
+	l := len(records)
+	binary.BigEndian.PutUint64(gamesBuffer, uint64(l))
+
 	for _, record := range records {
 		game, err := protocol.GameFromRecord(record)
 		if err != nil {
 			log.Error("Error parsing record:", err)
 			continue
 		}
-
-		c.middleware.PublishInQueue("games_to_count", []byte(protocol.SerializeGame(&game)))
+		gameBuffer := protocol.SerializeGame(&game)
+		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
 
-	log.Infof("Waiting for messages...")
-	select {}
+	c.middleware.PublishInQueue("games_to_count", gamesBuffer)
+	return nil
 }
 
 func (c *Controller) processReview(msg []byte) error {
-	record, err := c.readRecord(msg)
-	if err != nil { return err}
+	// record, err := c.readRecord(msg)
+	// if err != nil { return err}
 
-	review, err := protocol.ReviewFromRecord(record)
-	if err != nil {
-		return err
-	}
-
-	log.Info("Input controller. Sending review to reviews queue ", review.AppID)	
+	// review, err := protocol.ReviewFromRecord(record)
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// log.Info("Input controller. Sending review to reviews queue ", review.AppID)	
 	// Should send to the next queue
 
 	return nil
