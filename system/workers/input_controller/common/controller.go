@@ -2,12 +2,14 @@ package common
 
 import (
 	"encoding/csv"
-	"fmt"
+	"context"
+	"os"
+	"os/signal"
 	"strings"
-
+	"syscall"
+	"example.com/system/communication/middleware"
 	"example.com/system/communication/protocol"
 	"github.com/op/go-logging"
-	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 var log = logging.MustGetLogger("log")
@@ -17,171 +19,111 @@ type ControllerConfig struct {
 }
 
 type Controller struct {
-	conn   *amqp.Connection
-	config ControllerConfig
+	middleware *middleware.Middleware
+	config     ControllerConfig
 }
 
 func NewController(config ControllerConfig) (*Controller, error) {
-	conn, err := amqp.Dial(fmt.Sprintf("amqp://guest:guest@rabbitmq:%s/", config.ServerPort))
+	middleware, err := middleware.ConnectToMiddleware()
 	if err != nil {
 		return nil, err
 	}
 	controller := &Controller{
-		config: config,
-		conn:   conn,
+		config:     config,
+		middleware: middleware,
 	}
 
+	err = controller.middlewareInit()
+	if err != nil {
+		return nil, err
+	}
 	return controller, nil
 }
 
-func (c *Controller) InitializeRabbit() (amqp.Queue, amqp.Queue, amqp.Queue, *amqp.Channel, error) {
-	// Create a channel
-	ch, err := c.conn.Channel()
+func (c *Controller) middlewareInit() error {
+	err := c.middleware.DeclareDirectQueue("games")
 	if err != nil {
-		log.Fatalf("Failed to create channel: %s", err)
+		return err
 	}
-
-	gamesQueue, err := ch.QueueDeclare(
-		"games",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
+	err = c.middleware.DeclareDirectQueue("reviews")
 	if err != nil {
-		log.Fatalf("Failed to declare games queue: %s", err)
-		return gamesQueue, gamesQueue, gamesQueue, nil, err
+		return err
 	}
-
-
-	// Declare the reviews queue
-	reviewsQueue, err := ch.QueueDeclare(
-		"reviews",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
+	err = c.middleware.DeclareDirectQueue("games_to_count")
 	if err != nil {
-		log.Fatalf("Failed to declare reviews queue: %s", err)
-		return gamesQueue, reviewsQueue, reviewsQueue, nil, err
+		return err
 	}
-
-	gamesToCountQueue, err := ch.QueueDeclare(
-		"games_to_count",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		log.Fatalf("Failed to declare games queue: %s", err)
-		return gamesQueue, reviewsQueue, gamesToCountQueue, nil, err
-	}
-
-	return gamesQueue, reviewsQueue, gamesToCountQueue, ch, nil
+	return nil
 }
 
-func (c *Controller) InitializeGracefulExit() {
+func (c *Controller) Close() {
+	c.middleware.Close()
+}
 
+
+
+func (c *Controller) signalListener(cancel context.CancelFunc) {
+	chSignal := make(chan os.Signal, 1)
+	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
+	<-chSignal
+	cancel()
 }
 
 func (c *Controller) Start() {
+	log.Info("Starting input controller")
+	ctx, cancel := context.WithCancel(context.Background())
+	stop := make(chan bool)
+
+	go c.signalListener(cancel)
 	// c.InitializeGracefulExit()
-	defer c.conn.Close()
 
-	gamesQueue, reviewsQueue, gamesToCountQueue, ch, err := c.InitializeRabbit()
-
-	defer ch.Close()
-
-	gameMsgs, err := ch.Consume(
-		gamesQueue.Name,
-		"",
-		false,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		log.Fatalf("Failed to consume game messages: %s", err)
-		return
-	}
-
+	log.Infof("Reading games and reviews")
+	go c.middleware.ConsumeAndProcess("games", c.processGame, stop)
+	go c.middleware.ConsumeAndProcess("reviews", c.processReview, stop)
 	// Consume reviews messages
-	reviewMsgs, err := ch.Consume(
-		reviewsQueue.Name,
-		"",
-		false,
-		false,
-		false,
-		false,
-		nil,
-	)
+
+	<-ctx.Done()
+	
+}
+
+func (c *Controller) processGame(msg []byte) error {
+	log.Info("Processing game")
+	record, err := c.readRecord(msg)
+	if err != nil { return err}
+
+	game, err := protocol.GameFromRecord(record)
 	if err != nil {
-		log.Fatalf("Failed to consume review messages: %s", err)
-		return
+		return err
 	}
 
-	go func() {
-		for d := range gameMsgs {
-			str := string(d.Body)
-			r := csv.NewReader(strings.NewReader(str))
-			record, err := r.Read()
-			if err != nil {
-				fmt.Println("Error reading CSV:", err)
-				continue
-			}
+	log.Info("Input controller. Sending game to game_to_count queue ", game.Name)
 
-			game, err := protocol.GameFromRecord(record)
-			if err != nil {
-				fmt.Println("Error parsing record:", err)
-				continue
-			}
+	c.middleware.PublishInQueue("games_to_count", []byte(protocol.SerializeGame(&game)))
 
-			log.Info("Input controller. Sending game to game_to_count queue ", game.Name)
+	return nil
+}
 
-			body := []byte(protocol.SerializeGame(&game))
-			err = ch.Publish(
-				"",
-				gamesToCountQueue.Name,
-				false,
-				false,
-				amqp.Publishing{
-					ContentType: "text/plain",
-					Body:        body,
-				},
-			)
+func (c *Controller) processReview(msg []byte) error {
+	record, err := c.readRecord(msg)
+	if err != nil { return err}
 
-			d.Ack(false)
-		}
-	}()
+	review, err := protocol.ReviewFromRecord(record)
+	if err != nil {
+		return err
+	}
 
-	go func() {
-		for d := range reviewMsgs {
-			str := string(d.Body)
-			r := csv.NewReader(strings.NewReader(str))
-			record, err := r.Read()
-			if err != nil {
-				fmt.Println("Error reading CSV:", err)
-				continue
-			}
+	log.Info("Input controller. Sending review to reviews queue ", review.AppID)	
+	// Should send to the next queue
 
-			review, err := protocol.ReviewFromRecord(record)
-			if err != nil {
-				fmt.Println("Error parsing record:", err)
-				continue
-			}
+	return nil
+}
 
-			log.Info("Input controller parsed review: ", review.AppID, review.ReviewText, review.ReviewVotes)
 
-			d.Ack(false)
-		}
-	}()
-
-	log.Infof("Waiting for messages...")
-	select {}
+func (c *Controller) readRecord(msg[]byte) ([]string,error) {
+	r := csv.NewReader(strings.NewReader(string(msg)))
+	record, err := r.Read()
+	if err != nil {
+		return nil,err
+	}
+	return record, nil
 }

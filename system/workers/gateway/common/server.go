@@ -90,7 +90,6 @@ func (s *Server) PublishNewMessage(msg string, queue string) error {
 		if err != nil {
 			return err
 		}
-		log.Infof("Message sent successfully!")
 	}
 	return nil
 }

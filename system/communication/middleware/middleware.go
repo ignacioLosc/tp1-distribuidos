@@ -1,13 +1,14 @@
 package middleware
 
 import (
-    "log"
+	"log"
+
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type Middleware struct {
-	conn *amqp.Connection
-	ch *amqp.Channel
+	conn   *amqp.Connection
+	ch     *amqp.Channel
 	queues map[string]amqp.Queue
 }
 
@@ -17,28 +18,32 @@ func (m *Middleware) Close() {
 }
 
 func ConnectToMiddleware() (*Middleware, error) {
-	conn , err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
+	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 
 	ch, err := conn.Channel()
-	if err != nil { return nil,err }
+	if err != nil {
+		return nil, err
+	}
 	m := &Middleware{conn, ch, make(map[string]amqp.Queue)}
 	return m, nil
 }
 
-func (m *Middleware) DeclareDirectQueue(name string) error{
+func (m *Middleware) DeclareDirectQueue(name string) error {
 	q, err := m.ch.QueueDeclare(
-		name, // name
-		true, // durable
+		name,  // name
+		true,  // durable
 		false, // delete when unused
 		false, // exclusive
 		false, // no-wait
-		nil, // arguments
+		nil,   // arguments
 	)
 
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	m.queues[name] = q
 	return nil
@@ -46,10 +51,10 @@ func (m *Middleware) DeclareDirectQueue(name string) error{
 
 func (m *Middleware) PublishInQueue(queueName string, message []byte) error {
 	err := m.ch.Publish(
-		"", // exchange
+		"",        // exchange
 		queueName, // routing key
-		false, // mandatory
-		false, // immediate
+		false,     // mandatory
+		false,     // immediate
 		amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        message,
@@ -62,20 +67,20 @@ func (m *Middleware) PublishInQueue(queueName string, message []byte) error {
 	return nil
 }
 
-
 func (m *Middleware) ConsumeAndProcess(queueName string, process func([]byte) error, stop_chan chan bool) {
 	msgs, err := m.ch.Consume(
 		queueName, // queue
-		"", // consumer
-		false, // auto-ack
-		false, // exclusive
-		false, // no-local
-		false, // no-wait
-		nil, // args
+		"",        // consumer
+		false,     // auto-ack
+		false,     // exclusive
+		false,     // no-local
+		false,     // no-wait
+		nil,       // args
 	)
 
 	if err != nil {
 		log.Fatalf("Error consuming message: %s", err)
+		return
 	}
 
 	for {
