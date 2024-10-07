@@ -1,114 +1,138 @@
 package common
 
 import (
-	"fmt"
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
 
-	"example.com/system/communication/protocol"
+	mw "example.com/system/communication/middleware"
+	prot "example.com/system/communication/protocol"
 	"github.com/op/go-logging"
-	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 var log = logging.MustGetLogger("log")
 
-type ControllerConfig struct {
+
+const (
+	games_to_count   = "games_to_count"
+	count_acumulator = "count_accumulator"
+)
+
+type PlatformCounterConfig struct {
 	ServerPort string
 }
 
-type Controller struct {
-	conn   *amqp.Connection
-	config ControllerConfig
+
+type PlatformCounter struct {
+	config PlatformCounterConfig 
+	middleware *mw.Middleware
+	count prot.PlatformCount
+	stop chan bool
 }
 
-func NewController(config ControllerConfig) (*Controller, error) {
-	conn, err := amqp.Dial(fmt.Sprintf("amqp://guest:guest@rabbitmq:%s/", config.ServerPort))
+
+func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error){
+	middleware, err := mw.ConnectToMiddleware()
 	if err != nil {
 		return nil, err
 	}
-	controller := &Controller{
+
+	platformCounter := &PlatformCounter{
 		config: config,
-		conn:   conn,
+		stop: make(chan bool),
+		count: prot.PlatformCount{},
+	}	
+
+	err = platformCounter.middlewareCounterInit()
+	if err != nil {
+		return nil, err
 	}
 
-	return controller, nil
+	platformCounter.middleware = middleware
+	return platformCounter, nil
 }
 
-func (c *Controller) InitializeRabbit() (amqp.Queue, *amqp.Channel, error) {
-	ch, err := c.conn.Channel()
-	if err != nil {
-		log.Fatalf("Failed to create channel: %s", err)
-	}
 
-	gamesToCountQueue, err := ch.QueueDeclare(
-		"games_to_count",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
+func(p PlatformCounter) middlewareCounterInit() error {
+	err := p.middleware.DeclareDirectQueue(games_to_count)
 	if err != nil {
-		log.Fatalf("Failed to declare games queue: %s", err)
-		return gamesToCountQueue, nil, err
+		return err
 	}
-
-	return gamesToCountQueue, ch, nil
+	err = p.middleware.DeclareDirectQueue(count_acumulator)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (c *Controller) InitializeGracefulExit() {
-
+func (p *PlatformCounter) Close() {
+	p.middleware.Close()
 }
 
-func (c *Controller) Start() {
-	// c.InitializeGracefulExit()
-	defer c.conn.Close()
 
-	gamesToCountQueue, ch, err := c.InitializeRabbit()
+func (p *PlatformCounter) signalListener(cancel context.CancelFunc) {
+	chSignal := make(chan os.Signal, 1)
+	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
+	<-chSignal
+	cancel()
+}
 
-	defer ch.Close()
+func (p *PlatformCounter) Start() {
+	defer p.Close()
 
-	gameMsgs, err := ch.Consume(
-		gamesToCountQueue.Name,
-		"",
-		false,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		log.Fatalf("Failed to consume game messages: %s", err)
-		return
-	}
+	ctx, cancel := context.WithCancel(context.Background())
 
-	go func() {
-		for d := range gameMsgs {
-			game, err := protocol.DeserializeGame(d.Body)
+	go p.signalListener(cancel)
+
+	for { 
+		select {
+		case <-ctx.Done() :
+			p.stop <- true
+			return
+		default:
+			p.middleware.ConsumeAndProcess(games_to_count, p.countgames, p.stop)
+			err := p.sendResults()
 			if err != nil {
-				log.Errorf("Failed to deserialize game: %s", err)
-				d.Ack(false)
-				continue
+				log.Error("Error sending results: %v", err)
+				return
 			}
-
-			windowsCount := 0
-			linuxCount := 0
-			macCount := 0
-
-			if game.WindowsCompatible {
-				windowsCount++
-			}
-			if game.LinuxCompatible {
-				linuxCount++
-			}
-			if game.MacCompatible {
-				macCount++
-			}
-
-			log.Infof("Game %s has %d windows, %d linux, %d mac", game.AppID, windowsCount, linuxCount, macCount)
-
-			d.Ack(false)
+			p.count = prot.PlatformCount{}
 		}
-	}()
 
-	log.Infof("Waiting for messages...")
-	select {}
+	}
+}
+
+
+func (p *PlatformCounter) countgames(msg []byte) error {
+		if string(msg) == "EOF" {
+			p.stop <- true
+			p.stop <- true
+			return nil
+		}
+
+		game, err := prot.DeserializeGame(msg)
+		if err != nil {
+			return err
+		}
+
+		p.count.Increment(game.WindowsCompatible, game.LinuxCompatible, game.MacCompatible)
+
+		log.Info("Counter: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
+
+		return err
+}
+
+
+
+func (p *PlatformCounter) sendResults() error {
+	err := p.middleware.PublishInQueue(count_acumulator, p.count.Serialize())
+	if err != nil {
+		return err
+	}
+	err = p.middleware.PublishInQueue(count_acumulator, []byte("EOF"))
+	if err != nil {
+		return err
+	}
+	return nil
 }

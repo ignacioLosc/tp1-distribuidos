@@ -1,0 +1,9 @@
+
+server:
+    port: "5672"
+log:
+    level: "INFO"
+peers:
+    amount: 1
+
+

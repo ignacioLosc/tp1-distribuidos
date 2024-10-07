@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"example.com/system/workers/platform_counter/common"
+	"example.com/system/workers/platform_accumulator/common"
 	"github.com/op/go-logging"
 	"github.com/spf13/viper"
 )
@@ -24,6 +24,7 @@ func InitConfig() (*viper.Viper, error) {
 	// Add env variables supported
 	v.BindEnv("server", "port")
 	v.BindEnv("log", "level")
+	v.BindEnv("peers", "amount")
 
 	// Tries to read config or check envs
 	v.SetConfigFile("./config.yaml")
@@ -33,6 +34,7 @@ func InitConfig() (*viper.Viper, error) {
 
 	return v, nil
 }
+
 func InitLogger(logLevel string) error {
 	baseBackend := logging.NewLogBackend(os.Stdout, "", 0)
 	format := logging.MustStringFormatter(
@@ -53,9 +55,10 @@ func InitLogger(logLevel string) error {
 }
 
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s",
+	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | peers_amount: %s",
 		v.GetString("server.port"),
 		v.GetString("log.level"),
+		v.GetString("peers.amount"),
 	)
 }
 
@@ -71,15 +74,16 @@ func main() {
 
 	PrintConfig(v)
 
-	config := common.PlatformCounterConfig{
+	config := common.PlatformAccumulatorConfig{
 		ServerPort: v.GetString("server.port"),
+		Peers:      v.GetInt("peers.amount"),
 	}
-	platformCounter, err := common.NewPlatformCounter(config)
+	platform_accumulator, err := common.NewPlatformAccumulator(config)
 
 	if err != nil {
 		log.Critical("action: bind server | result: fail | err: %s", err)
 	}
 
-	platformCounter.Start()
+	platform_accumulator.Start()
 
 }

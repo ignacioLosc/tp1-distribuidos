@@ -92,7 +92,11 @@ func (m *Middleware) ConsumeAndProcess(queueName string, processFunction func([]
 			if !ok {
 				return
 			}
-			processFunction(d.Body)
+			err := processFunction(d.Body)
+			if err != nil {
+				log.Fatalf("Error processing message: %s", err)
+				return
+			}
 			d.Ack(false)
 		}
 	}

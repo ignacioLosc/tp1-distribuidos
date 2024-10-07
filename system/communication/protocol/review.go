@@ -31,7 +31,7 @@ func ReviewFromRecord(record []string) (Review, error) {
 	}, nil
 }
 
-func serializeReview(review *Review) []byte {
+func SerializeReview(review *Review) []byte {
 	bytes := make([]byte, 0)
 
 	appIdLen := len(review.AppID)
@@ -49,7 +49,7 @@ func serializeReview(review *Review) []byte {
 	return bytes
 }
 
-func deserializeReview(bytes []byte) (Review, error) {
+func DeserializeReview(bytes []byte) (Review, error) {
 	appIdLen := uint64(bytes[0])
 	appId := string(bytes[1:appIdLen+1])
 
