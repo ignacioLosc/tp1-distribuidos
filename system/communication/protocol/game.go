@@ -4,8 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strconv"
-	// "fmt"
-	// "strconv"
 )
 
 type Game struct {
@@ -51,7 +49,7 @@ func boolToByte(b bool) byte {
 	return 0
 }
 
-func serializeGame(game *Game) []byte {
+func SerializeGame(game *Game) []byte {
 	bytes := make([]byte, 0)
 
 	appIdLen := len(game.AppID)
@@ -82,7 +80,7 @@ func serializeGame(game *Game) []byte {
 	return bytes
 }
 
-func deserializeGame(bytes []byte) (Game, error) {
+func DeserializeGame(bytes []byte) (Game, error) {
 	index := 0
 
 	appIdLen := uint64(bytes[index])

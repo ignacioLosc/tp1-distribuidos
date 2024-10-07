@@ -12,6 +12,7 @@ remove_old :
 create_images:
 	docker build -f system/workers/gateway/Dockerfile -t gateway:latest system/
 	docker build -f system/workers/input_controller/Dockerfile -t input_controller:latest system/
+	docker build -f system/workers/platform_counter/Dockerfile -t platform_counter:latest system/
 	docker build -f client/Dockerfile -t client:latest client/
 
 system-up: create_base_images create_images network-create

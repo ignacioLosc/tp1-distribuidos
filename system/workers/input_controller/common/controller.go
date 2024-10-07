@@ -34,14 +34,13 @@ func NewController(config ControllerConfig) (*Controller, error) {
 	return controller, nil
 }
 
-func (c *Controller) InitializeRabbit() (amqp.Queue, amqp.Queue, *amqp.Channel, error) {
+func (c *Controller) InitializeRabbit() (amqp.Queue, amqp.Queue, amqp.Queue, *amqp.Channel, error) {
 	// Create a channel
 	ch, err := c.conn.Channel()
 	if err != nil {
 		log.Fatalf("Failed to create channel: %s", err)
 	}
 
-	// Declare the games queue
 	gamesQueue, err := ch.QueueDeclare(
 		"games",
 		true,
@@ -52,8 +51,9 @@ func (c *Controller) InitializeRabbit() (amqp.Queue, amqp.Queue, *amqp.Channel, 
 	)
 	if err != nil {
 		log.Fatalf("Failed to declare games queue: %s", err)
-		return gamesQueue, gamesQueue, nil, err
+		return gamesQueue, gamesQueue, gamesQueue, nil, err
 	}
+
 
 	// Declare the reviews queue
 	reviewsQueue, err := ch.QueueDeclare(
@@ -66,9 +66,23 @@ func (c *Controller) InitializeRabbit() (amqp.Queue, amqp.Queue, *amqp.Channel, 
 	)
 	if err != nil {
 		log.Fatalf("Failed to declare reviews queue: %s", err)
-		return gamesQueue, reviewsQueue, nil, err
+		return gamesQueue, reviewsQueue, reviewsQueue, nil, err
 	}
-	return gamesQueue, reviewsQueue, ch, nil
+
+	gamesToCountQueue, err := ch.QueueDeclare(
+		"games_to_count",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("Failed to declare games queue: %s", err)
+		return gamesQueue, reviewsQueue, gamesToCountQueue, nil, err
+	}
+
+	return gamesQueue, reviewsQueue, gamesToCountQueue, ch, nil
 }
 
 func (c *Controller) InitializeGracefulExit() {
@@ -79,7 +93,7 @@ func (c *Controller) Start() {
 	// c.InitializeGracefulExit()
 	defer c.conn.Close()
 
-	gamesQueue, reviewsQueue, ch, err := c.InitializeRabbit()
+	gamesQueue, reviewsQueue, gamesToCountQueue, ch, err := c.InitializeRabbit()
 
 	defer ch.Close()
 
@@ -128,7 +142,19 @@ func (c *Controller) Start() {
 				continue
 			}
 
-			fmt.Println("Input controller parsed game: ", game.AppID, game.Name, game.Genres)
+			log.Info("Input controller. Sending game to game_to_count queue ", game.Name)
+
+			body := []byte(protocol.SerializeGame(&game))
+			err = ch.Publish(
+				"",
+				gamesToCountQueue.Name,
+				false,
+				false,
+				amqp.Publishing{
+					ContentType: "text/plain",
+					Body:        body,
+				},
+			)
 
 			d.Ack(false)
 		}
