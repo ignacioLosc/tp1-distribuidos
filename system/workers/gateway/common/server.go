@@ -111,7 +111,7 @@ func (s *Server) receiveMessage(channel chan string) error {
 			return err
 		}
 
-		fmt.Println("Received ", msg)
+		fmt.Println("Received Game")
 		if msg == "EOF" {
 			s.responder.Send("ACK", 0)
 			return nil

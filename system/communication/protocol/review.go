@@ -14,12 +14,12 @@ type Review struct {
 	ReviewVotes int
 }
 
-func reviewFromRecord(record []string) (Review, error) {
+func ReviewFromRecord(record []string) (Review, error) {
 	reviewScore, err1 := strconv.Atoi(record[3])
 	reviewVotes, err2 := strconv.Atoi(record[4])
 
 	if err1 != nil || err2 != nil {
-		return Review{}, fmt.Errorf("Error parsing record: %v", record)
+		return Review{}, fmt.Errorf("Error parsing record: %v", record[3], record[4])
 	}
 
 	return Review {
@@ -43,7 +43,7 @@ func serializeReview(review *Review) []byte {
 	reviewTextLenBuffer := make([]byte, 8)
 	binary.BigEndian.PutUint64(reviewTextLenBuffer, uint64(len(review.ReviewText)))
 	bytes = append(bytes, reviewTextLenBuffer...)
-	
+
 	bytes = append(bytes, []byte(review.ReviewText)...)
 
 	return bytes

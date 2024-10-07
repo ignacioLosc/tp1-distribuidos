@@ -1,8 +1,11 @@
 package common
 
 import (
+	"encoding/csv"
 	"fmt"
+	"strings"
 
+	"example.com/system/communication/protocol"
 	"github.com/op/go-logging"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -80,7 +83,6 @@ func (c *Controller) Start() {
 
 	defer ch.Close()
 
-	// Consume games messages
 	gameMsgs, err := ch.Consume(
 		gamesQueue.Name,
 		"",
@@ -112,14 +114,44 @@ func (c *Controller) Start() {
 
 	go func() {
 		for d := range gameMsgs {
-			log.Infof("Received game: %s\n", d.Body)
+			str := string(d.Body)
+			r := csv.NewReader(strings.NewReader(str))
+			record, err := r.Read()
+			if err != nil {
+				fmt.Println("Error reading CSV:", err)
+				continue
+			}
+
+			game, err := protocol.GameFromRecord(record)
+			if err != nil {
+				fmt.Println("Error parsing record:", err)
+				continue
+			}
+
+			fmt.Println("Input controller parsed game: ", game.AppID, game.Name, game.Genres)
+
 			d.Ack(false)
 		}
 	}()
 
 	go func() {
 		for d := range reviewMsgs {
-			log.Infof("Received review: %s\n", d.Body)
+			str := string(d.Body)
+			r := csv.NewReader(strings.NewReader(str))
+			record, err := r.Read()
+			if err != nil {
+				fmt.Println("Error reading CSV:", err)
+				continue
+			}
+
+			review, err := protocol.ReviewFromRecord(record)
+			if err != nil {
+				fmt.Println("Error parsing record:", err)
+				continue
+			}
+
+			log.Info("Input controller parsed review: ", review.AppID, review.ReviewText, review.ReviewVotes)
+
 			d.Ack(false)
 		}
 	}()

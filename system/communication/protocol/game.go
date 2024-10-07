@@ -4,7 +4,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strconv"
-) 
+	// "fmt"
+	// "strconv"
+)
 
 type Game struct {
 	AppID                  string
@@ -17,7 +19,7 @@ type Game struct {
 	ReleaseDate            string
 }
 
-func gameFromRecord(record []string) (Game, error) {
+func GameFromRecord(record []string) (Game, error) {
 	game := Game{
 		AppID:       record[0],
 		Name:        record[1],
@@ -29,21 +31,15 @@ func gameFromRecord(record []string) (Game, error) {
 	mac := record[18]
 	linux := record[19]
 
+	game.WindowsCompatible = windows == "True"
+	game.MacCompatible = mac == "True"
+	game.LinuxCompatible = linux == "True"
+
 	AveragePlaytimeForever, err := strconv.Atoi(record[29])
 	if err != nil {
-		return Game{}, fmt.Errorf("Error parsing record: %v", record)
+		return Game{}, fmt.Errorf("Error parsing record's averagePlaytimeForever: %v", record[28])
 	}
 	game.AveragePlaytimeForever = AveragePlaytimeForever
-
-	if windows == "True" {
-		game.WindowsCompatible = true
-	}
-	if mac == "True" {
-		game.MacCompatible = true
-	}
-	if linux == "True" {
-		game.LinuxCompatible = true
-	}
 
 	return game, nil
 }
@@ -108,7 +104,7 @@ func deserializeGame(bytes []byte) (Game, error) {
 	index++
 	releaseDate := string(bytes[index : index+int(releaseDateLen)])
 	index += int(releaseDateLen)
-	
+
 	averagePlaytimeForever := binary.BigEndian.Uint64(bytes[index : index+8])
 	index += 8
 
