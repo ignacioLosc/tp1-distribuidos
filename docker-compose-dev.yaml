@@ -20,6 +20,7 @@ services:
     entrypoint: /client
     volumes:
       - ./.data/games.csv:/games.csv
+      - ./.data/dataset.csv:/dataset.csv
     depends_on: 
       - gateway
     networks:

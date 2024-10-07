@@ -45,7 +45,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 	return server, nil
 }
 
-func (s *Server) CreateRabbitQueue() (*amqp.Connection, amqp.Queue, *amqp.Channel) {
+func (s *Server) CreateRabbitQueue() (*amqp.Connection, amqp.Queue, amqp.Queue, *amqp.Channel) {
 	// Connect to RabbitMQ
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
 	if err != nil {
@@ -57,8 +57,8 @@ func (s *Server) CreateRabbitQueue() (*amqp.Connection, amqp.Queue, *amqp.Channe
 	if err != nil {
 		log.Fatalf("Failed to create channel: %s", err)
 	}
-	// Declare the queue
-	q, err := ch.QueueDeclare(
+	// Declare the games queue
+	gamesQueue, err := ch.QueueDeclare(
 		"games",
 		true,
 		false,
@@ -67,12 +67,24 @@ func (s *Server) CreateRabbitQueue() (*amqp.Connection, amqp.Queue, *amqp.Channe
 		nil,
 	)
 	if err != nil {
-		log.Fatalf("Failed to declare queue: %s", err)
+		log.Fatalf("Failed to declare games queue: %s", err)
 	}
-	return conn, q, ch
+	// Declare the reviews queue
+	reviewsQueue, err := ch.QueueDeclare(
+		"reviews",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("Failed to declare reviews queue: %s", err)
+	}
+	return conn, gamesQueue, reviewsQueue, ch
 }
 
-func (s *Server) PublishNewGames(msg string, ch *amqp.Channel, q *amqp.Queue) {
+func (s *Server) PublishNewMessage(msg string, ch *amqp.Channel, q *amqp.Queue) {
 	// Publish a message
 	body := []byte(msg)
 	err := ch.Publish(
@@ -89,6 +101,24 @@ func (s *Server) PublishNewGames(msg string, ch *amqp.Channel, q *amqp.Queue) {
 		log.Errorf("Failed to publish message: %s", err)
 	}
 	log.Infof("Message sent successfully!")
+}
+
+func (s *Server) receiveMessage(channel chan string) error {
+	for {
+		msg, err := s.responder.Recv(0)
+		if err != nil {
+			log.Errorf("Recv error: %v", err)
+			return err
+		}
+
+		fmt.Println("Received ", msg)
+		if msg == "EOF" {
+			s.responder.Send("ACK", 0)
+			return nil
+		}
+		channel <- msg
+		s.responder.Send("ACK", 0)
+	}
 }
 
 func (s *Server) Start() {
@@ -110,14 +140,21 @@ func (s *Server) Start() {
 	}()
 
 	chGames := make(chan string, 1)
+	chReviews := make(chan string, 1)
 
-	conn, q, ch := s.CreateRabbitQueue()
+	conn, gamesQueue, reviewsQueue, ch := s.CreateRabbitQueue()
 	defer conn.Close()
 	defer ch.Close()
 
 	go func() {
 		for game := range chGames {
-			s.PublishNewGames(game, ch, &q)
+			s.PublishNewMessage(game, ch, &gamesQueue)
+		}
+	}()
+
+	go func() {
+		for review := range chReviews {
+			s.PublishNewMessage(review, ch, &reviewsQueue)
 		}
 	}()
 
@@ -128,18 +165,16 @@ func (s *Server) Start() {
 			s.responder.Close()
 			return
 		default:
-			msg, err := s.responder.Recv(0)
+			log.Infof("action: [BEGIN] receiving_games")
+			err := s.receiveMessage(chGames)
 			if err != nil {
-				log.Errorf("Recv error: %v", err)
 				return
 			}
-			fmt.Println("Received ", msg)
-
-			chGames <- msg
-
-			reply := "World"
-			s.responder.Send(reply, 0)
-			fmt.Println("Sent", reply)
+			log.Infof("action: [BEGIN] receiving_reviews")
+			err = s.receiveMessage(chReviews)
+			if err != nil {
+				return
+			}
 		}
 	}
 }
