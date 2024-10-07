@@ -60,8 +60,6 @@ func (c *Controller) Close() {
 	c.middleware.Close()
 }
 
-
-
 func (c *Controller) signalListener(cancel context.CancelFunc) {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
@@ -80,27 +78,34 @@ func (c *Controller) Start() {
 	log.Infof("Reading games and reviews")
 	go c.middleware.ConsumeAndProcess("games", c.processGame, stop)
 	go c.middleware.ConsumeAndProcess("reviews", c.processReview, stop)
-	// Consume reviews messages
 
 	<-ctx.Done()
-	
 }
 
 func (c *Controller) processGame(msg []byte) error {
-	log.Info("Processing game")
-	record, err := c.readRecord(msg)
-	if err != nil { return err}
-
-	game, err := protocol.GameFromRecord(record)
+	log.Info("Processing batch games")
+	str := string(msg)
+	reader := csv.NewReader(strings.NewReader(str))
+	records, err := reader.ReadAll()
 	if err != nil {
+		log.Error("Error reading CSV:", err)
 		return err
 	}
 
-	log.Info("Input controller. Sending game to game_to_count queue ", game.Name)
+	log.Info("Input controller. Parsed records from CSV: ", len(records))
 
-	c.middleware.PublishInQueue("games_to_count", []byte(protocol.SerializeGame(&game)))
+	for _, record := range records {
+		game, err := protocol.GameFromRecord(record)
+		if err != nil {
+			log.Error("Error parsing record:", err)
+			continue
+		}
 
-	return nil
+		c.middleware.PublishInQueue("games_to_count", []byte(protocol.SerializeGame(&game)))
+	}
+
+	log.Infof("Waiting for messages...")
+	select {}
 }
 
 func (c *Controller) processReview(msg []byte) error {

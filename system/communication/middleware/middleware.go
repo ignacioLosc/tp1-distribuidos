@@ -67,7 +67,7 @@ func (m *Middleware) PublishInQueue(queueName string, message []byte) error {
 	return nil
 }
 
-func (m *Middleware) ConsumeAndProcess(queueName string, process func([]byte) error, stop_chan chan bool) {
+func (m *Middleware) ConsumeAndProcess(queueName string, processFunction func([]byte) error, stop_chan chan bool) {
 	msgs, err := m.ch.Consume(
 		queueName, // queue
 		"",        // consumer
@@ -92,7 +92,7 @@ func (m *Middleware) ConsumeAndProcess(queueName string, process func([]byte) er
 			if !ok {
 				return
 			}
-			process(d.Body)
+			processFunction(d.Body)
 			d.Ack(false)
 		}
 	}

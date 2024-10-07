@@ -2,13 +2,13 @@ package common
 
 import (
 	"context"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
 
 	mw "example.com/system/communication/middleware"
 	"github.com/op/go-logging"
-	zmq "github.com/pebbe/zmq4"
 )
 
 var log = logging.MustGetLogger("log")
@@ -18,7 +18,7 @@ type ServerConfig struct {
 }
 
 type Server struct {
-	responder   zmq.Socket
+	listener  net.Listener
 	config      ServerConfig
 	middleware  *mw.Middleware
 	gamesChan   chan string
@@ -26,20 +26,16 @@ type Server struct {
 }
 
 func NewServer(config ServerConfig) (*Server, error) {
-	responder, err := zmq.NewSocket(zmq.Type(zmq.REP))
-	if err != nil {
-		return nil, err
-	}
+	addr := ":" + config.ServerPort
 
-	addr := "tcp://*:" + config.ServerPort
-	err = responder.Bind(addr)
+	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 
 	server := &Server{
+		listener: listener,
 		config:      config,
-		responder:   *responder,
 		gamesChan:   make(chan string),
 		reviewsChan: make(chan string),
 	}
@@ -50,11 +46,13 @@ func NewServer(config ServerConfig) (*Server, error) {
 		return nil, err
 	}
 
+	log.Infof("Server listening on %s", addr)
+
 	return server, nil
 }
 
 func (s *Server) Close() {
-	err := s.responder.Close()
+	err := s.listener.Close()
 	if err != nil {
 		log.Errorf("Error closing responder: %v", err)
 	}
@@ -94,63 +92,68 @@ func (s *Server) PublishNewMessage(msg string, queue string) error {
 	return nil
 }
 
-func (s *Server) receiveMessage(channel chan string, ctx context.Context) error {
+func (s *Server) receiveMessage(conn net.Conn, channel chan string, ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			log.Infof("action: [RECEIVE] | result: fail | err: context cancelled")
 			return nil
 		default:
-			msg, err := s.responder.Recv(0)
+			buffer := make([]byte, 1024)
+			// conn.SetReadDeadline(time.Now().Add(5 * time.Second)) // Timeout for receiving
+			n, err := conn.Read(buffer)
 			if err != nil {
-				log.Errorf("Recv error: %v", err)
 				return err
 			}
-			if msg == "EOF" {
-				s.responder.Send("ACK", 0)
-				return nil
-			}
-			channel <- msg
-			s.responder.Send("ACK", 0)
+			message := string(buffer[:n])
+			channel <- message
+			return nil
 		}
 	}
 }
 
 func (s *Server) Start() {
-	defer s.Close()
-
-	zctx, _ := zmq.NewContext()
+	defer s.listener.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go s.signalListener(zctx, cancel)
+	go func() {
+		chSignal := make(chan os.Signal, 1)
+		signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
+		<-chSignal
+		cancel()
+	}()
 
 	go s.listenOnChannels(ctx)
 
 	for {
-		s.recieveDatasets(ctx)
-		// Esperar Respuestas de los workers
+		conn, err := s.listener.Accept()
+		if err != nil {
+			log.Errorf("Error accepting connection: %v", err)
+			continue
+		}
+
+		s.receiveDatasets(conn, ctx)
 	}
 }
 
-func (s *Server) signalListener(zctx *zmq.Context, cancel context.CancelFunc) {
+func (s *Server) signalListener(cancel context.CancelFunc) {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 	<-chSignal
-	zctx.SetRetryAfterEINTR(false)
-	zmq.SetRetryAfterEINTR(false)
 	cancel()
 }
 
-func (s *Server) recieveDatasets(ctx context.Context) {
+func (s *Server) receiveDatasets(conn net.Conn, ctx context.Context) {
 	log.Infof("action: [BEGIN] receiving_games")
-	err := s.receiveMessage(s.gamesChan, ctx)
+	err := s.receiveMessage(conn, s.gamesChan, ctx)
 	if err != nil {
-		log.Criticalf("action: [RECIEVE] | result: fail | err: %s", err)
+		log.Criticalf("action: [RECEIVE] | result: fail | err: %s", err)
 	}
 	log.Infof("action: [BEGIN] receiving_reviews")
-	err = s.receiveMessage(s.reviewsChan, ctx)
+	err = s.receiveMessage(conn, s.reviewsChan, ctx)
 	if err != nil {
-		log.Criticalf("action: [RECIEVE] | result: fail | err: %s", err)
+		log.Criticalf("action: [RECEIVE] | result: fail | err: %s", err)
 	}
 }
 
