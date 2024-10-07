@@ -3,6 +3,7 @@ package common
 import (
 	"bufio"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
@@ -50,7 +51,7 @@ func (c *Client) sendCSV(fileReader *bufio.Reader) error {
 	}
 
 	var batch []string
-	batchSize := 100
+	batchSize := 1000
 
 	for {
 		for len(batch) < batchSize {
@@ -80,7 +81,7 @@ func (c *Client) sendCSV(fileReader *bufio.Reader) error {
 
 			batch = append(batch, line)
 
-			MaxBufferSize := 1024
+			MaxBufferSize := 65536
 			if len(strings.Join(batch, "\n")) >= MaxBufferSize {
 				break
 			}
@@ -95,12 +96,32 @@ func (c *Client) sendCSV(fileReader *bufio.Reader) error {
 	}
 }
 
+func send_all(sock net.Conn, buf []byte) error {
+	totalWritten := 0
+	for totalWritten < len(buf) {
+		size, err := sock.Write(buf[totalWritten:])
+		if err != nil {
+			return fmt.Errorf("failed to write data: %w.", err)
+		}
+		totalWritten += size
+	}
+	return nil
+}
+
 func sendBatchTCP(conn net.Conn, data string) error {
-	_, err := fmt.Fprintf(conn, "%s\n", data)
+	lenBuffer := make([]byte, 8)
+	binary.BigEndian.PutUint64(lenBuffer, uint64(len(data)))
+	err := send_all(conn, lenBuffer)
 	if err != nil {
-		log.Info("Unable to send batch: %v", err)
 		return err
 	}
+
+	buffer := []byte(data)	
+	err = send_all(conn, buffer)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

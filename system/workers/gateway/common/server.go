@@ -2,6 +2,8 @@ package common
 
 import (
 	"context"
+	"encoding/binary"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -92,6 +94,31 @@ func (s *Server) PublishNewMessage(msg string, queue string) error {
 	return nil
 }
 
+func send_all(sock net.Conn, buf []byte) error {
+	totalWritten := 0
+	for totalWritten < len(buf) {
+		size, err := sock.Write(buf[totalWritten:])
+		if err != nil {
+			return fmt.Errorf("failed to write data: %w.", err)
+		}
+		totalWritten += size
+	}
+	return nil
+}
+
+func recv_all(sock net.Conn, sz int) ([]byte, error) {
+	buffer := make([]byte, sz)
+	totalRead := 0
+	for totalRead < len(buffer) {
+		size, err := sock.Read(buffer)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read data: %w. Trying again.", err)
+		}
+		totalRead += size
+	}
+	return buffer, nil
+}
+
 func (s *Server) receiveMessage(conn net.Conn, channel chan string, ctx context.Context) error {
 	for {
 		select {
@@ -99,15 +126,26 @@ func (s *Server) receiveMessage(conn net.Conn, channel chan string, ctx context.
 			log.Infof("action: [RECEIVE] | result: fail | err: context cancelled")
 			return nil
 		default:
-			buffer := make([]byte, 1024)
-			// conn.SetReadDeadline(time.Now().Add(5 * time.Second)) // Timeout for receiving
-			n, err := conn.Read(buffer)
+			lenBuffer, err := recv_all(conn, 8)
 			if err != nil {
+				log.Infof("action: [RECEIVE LEN BUFFER] | result: fail | err: %s", err)
 				return err
 			}
-			message := string(buffer[:n])
+			lenData := binary.BigEndian.Uint64(lenBuffer)
+
+			data, err := recv_all(conn, int(lenData))
+			if err != nil {
+				log.Infof("action: [RECEIVE DATA] | result: fail | err: %s", err)
+				return err
+			}
+
+			message := string(data)
 			channel <- message
-			return nil
+			if message == "EOF" {
+				log.Infof("action: [RECEIVE] | result: success")
+				return nil
+			}
+			continue
 		}
 	}
 }
