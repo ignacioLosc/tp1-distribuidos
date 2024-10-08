@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"example.com/system/communication/middleware"
@@ -102,6 +103,10 @@ func shouldFilter(game prot.Game, filterBy string) (bool, error) {
 			return false, err
 		}
 		return decade >= 2020 || decade < 2009, nil
+	} else if filterBy == "genre.indie" {
+		return strings.Contains(game.Genres, "Indie"), nil
+	} else if filterBy == "genre.shooter" {
+		return strings.Contains(game.Genres, "Shooter"), nil
 	}
 	return true, nil
 }
@@ -149,6 +154,7 @@ func (p *GenreFilter) filterGames(msg []byte) error {
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
 
+	// Can receive queue name by config
 	err := p.middleware.PublishInQueue("indie_games", gamesBuffer)
 	if err != nil {
 		return err
