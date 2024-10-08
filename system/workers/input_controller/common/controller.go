@@ -111,6 +111,7 @@ func (c *Controller) processGame(msg []byte) error {
 	}
 
 	c.middleware.PublishInQueue("games_to_count", gamesBuffer)
+	c.middleware.PublishInQueue("games_to_filter", gamesBuffer)
 	return nil
 }
 
@@ -123,18 +124,17 @@ func (c *Controller) processReview(msg []byte) error {
 	// 	return err
 	// }
 	//
-	// log.Info("Input controller. Sending review to reviews queue ", review.AppID)	
+	// log.Info("Input controller. Sending review to reviews queue ", review.AppID)
 	// Should send to the next queue
 
 	return nil
 }
 
-
-func (c *Controller) readRecord(msg[]byte) ([]string,error) {
+func (c *Controller) readRecord(msg []byte) ([]string, error) {
 	r := csv.NewReader(strings.NewReader(string(msg)))
 	record, err := r.Read()
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	return record, nil
 }

@@ -20,7 +20,7 @@ type ServerConfig struct {
 }
 
 type Server struct {
-	listener  net.Listener
+	listener    net.Listener
 	config      ServerConfig
 	middleware  *mw.Middleware
 	gamesChan   chan string
@@ -36,7 +36,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 	}
 
 	server := &Server{
-		listener: listener,
+		listener:    listener,
 		config:      config,
 		gamesChan:   make(chan string),
 		reviewsChan: make(chan string),
@@ -72,6 +72,7 @@ func middlewareGatewayInit() (*mw.Middleware, error) {
 	}
 	middleware.DeclareDirectQueue("games")
 	middleware.DeclareDirectQueue("reviews")
+	middleware.DeclareDirectQueue("results")
 
 	return middleware, nil
 }
@@ -150,15 +151,26 @@ func (s *Server) receiveMessage(conn net.Conn, channel chan string, ctx context.
 	}
 }
 
+func (s *Server) waitForResults(conn net.Conn, stop chan bool) {
+	returnResults := func(msg []byte) error {
+		conn.Write(msg)
+		return nil
+	}
+	log.Infof("action: [WAIT FOR QUERY RESULTS]")
+	go s.middleware.ConsumeAndProcess("results", returnResults, stop)
+}
+
 func (s *Server) Start() {
 	defer s.listener.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
+	stop := make(chan bool)
 
 	go func() {
 		chSignal := make(chan os.Signal, 1)
 		signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 		<-chSignal
+		stop <- true
 		cancel()
 	}()
 
@@ -172,6 +184,7 @@ func (s *Server) Start() {
 		}
 
 		s.receiveDatasets(conn, ctx)
+		s.waitForResults(conn, stop)
 	}
 }
 

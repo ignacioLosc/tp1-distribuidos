@@ -25,6 +25,15 @@ services:
     networks:
       - testing_net_tp1
 
+  genre_filter:
+    container_name: genre_filter
+    image: genre_filter:latest
+    entrypoint: /genre_filter
+    depends_on:
+      - input_controller
+    networks:
+      - testing_net_tp1
+
   client:
     container_name: client
     image:  client:latest
