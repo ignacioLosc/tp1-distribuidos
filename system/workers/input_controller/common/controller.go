@@ -87,14 +87,20 @@ func (c *Controller) Start() {
 func (c *Controller) processGame(msg []byte) error {
 	log.Info("Processing batch games")
 	str := string(msg)
+
+	if str == "EOF" {
+		c.middleware.PublishInQueue("games_to_count", msg)
+		c.middleware.PublishInQueue("games_to_filter", msg)
+
+		return nil
+	}
+
 	reader := csv.NewReader(strings.NewReader(str))
 	records, err := reader.ReadAll()
 	if err != nil {
 		log.Error("Error reading CSV:", err)
-		return err
+		return nil // MAL, CORREGIR
 	}
-
-	log.Info("Input controller. Parsed records from CSV: ", len(records))
 
 	gamesBuffer := make([]byte, 8)
 	l := len(records)
@@ -110,6 +116,7 @@ func (c *Controller) processGame(msg []byte) error {
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
 
+	log.Info("Input controller. Sending games to games_to_count and games_to_filter queues. ", l)
 	c.middleware.PublishInQueue("games_to_count", gamesBuffer)
 	c.middleware.PublishInQueue("games_to_filter", gamesBuffer)
 	return nil

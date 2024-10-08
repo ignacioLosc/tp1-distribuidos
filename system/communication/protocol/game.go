@@ -18,6 +18,10 @@ type Game struct {
 }
 
 func GameFromRecord(record []string) (Game, error) {
+	if len(record) < 38 {
+		return Game{}, fmt.Errorf("Record has less than 38 fields")
+	}
+
 	game := Game{
 		AppID:       record[0],
 		Name:        record[1],
@@ -81,30 +85,65 @@ func SerializeGame(game *Game) []byte {
 }
 
 func DeserializeGame(bytes []byte) (Game, error, int) {
+	errorMessage := fmt.Errorf("Not enough bytes to deserialize game")
+	if len(bytes) < 1 {
+		return Game{}, errorMessage, 0
+	}
+
 	index := 0
 
 	appIdLen := uint64(bytes[index])
 	index++
+
+	if len(bytes) < index+int(appIdLen) {
+		return Game{}, errorMessage, 0
+	}
+
 	appId := string(bytes[index : index+int(appIdLen)])
 	index += int(appIdLen)
 
+	if len(bytes) < index+1 {
+		return Game{}, errorMessage, 0
+	}
 	nameLen := uint64(bytes[index])
 	index++
+
+	if len(bytes) < index+int(nameLen) {
+		return Game{}, errorMessage, 0
+	}
 	name := string(bytes[index : index+int(nameLen)])
 	index += int(nameLen)
 
+	if len(bytes) < index+8 {
+		return Game{}, errorMessage, 0
+	}
 	genresLen := binary.BigEndian.Uint64(bytes[index:index+8])
 	index += 8
+
+	if len(bytes) < index+int(genresLen) {
+		return Game{}, errorMessage, 0
+	}
 	genres := string(bytes[index:(index+int(genresLen))])
 	index += int(genresLen)
 
+	if len(bytes) < index+1 {
+		return Game{}, errorMessage, 0
+	}
 	releaseDateLen := uint64(bytes[index])
+
+	if len(bytes) < index+int(releaseDateLen) {
+		return Game{}, errorMessage, 0
+	}
 	index++
 	releaseDate := string(bytes[index : index+int(releaseDateLen)])
 	index += int(releaseDateLen)
 
+	if len(bytes) < index+11 {
+		return Game{}, errorMessage, 0
+	}
 	averagePlaytimeForever := binary.BigEndian.Uint64(bytes[index : index+8])
 	index += 8
+
 
 	windowsCompatible := bytes[index] == 1
 	index++

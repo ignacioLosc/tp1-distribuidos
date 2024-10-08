@@ -27,7 +27,7 @@ type PlatformCounterConfig struct {
 
 
 type PlatformCounter struct {
-	config PlatformCounterConfig 
+	config PlatformCounterConfig
 	middleware *mw.Middleware
 	count prot.PlatformCount
 	stop chan bool
@@ -44,7 +44,8 @@ func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error){
 		config: config,
 		stop: make(chan bool),
 		count: prot.PlatformCount{},
-	}	
+		middleware: middleware,
+	}
 
 	err = platformCounter.middlewareCounterInit()
 	if err != nil {
@@ -87,24 +88,27 @@ func (p *PlatformCounter) Start() {
 
 	go p.signalListener(cancel)
 
-	for { 
+	for {
 		select {
 		case <-ctx.Done() :
 			p.stop <- true
 			return
 		default:
-			p.middleware.ConsumeAndProcess(games_to_count, p.countgames, p.stop)
+			p.middleware.ConsumeAndProcess(games_to_count, p.countGames, p.stop)
 			err := p.sendResults()
 			if err != nil {
 				log.Error("Error sending results: %v", err)
 				return
 			}
-			p.count = prot.PlatformCount{}
+			log.Info("Restarting results.")
+			p.count.Windows = 0
+			p.count.Linux = 0
+			p.count.Mac = 0
 		}
 	}
 }
 
-func (p *PlatformCounter) countgames(msg []byte) error {
+func (p *PlatformCounter) countGames(msg []byte) error {
 		if string(msg) == "EOF" {
 			p.stop <- true
 			p.stop <- true
@@ -132,7 +136,7 @@ func (p *PlatformCounter) countgames(msg []byte) error {
 			p.count.Increment(game.WindowsCompatible, game.LinuxCompatible, game.MacCompatible)
 		}
 
-		log.Info("Counter: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
+		log.Infof("Platform Counter: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
 
 		return nil
 }
