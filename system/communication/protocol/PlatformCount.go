@@ -2,13 +2,13 @@ package protocol
 
 import (
 	"encoding/binary"
+	"fmt"
 )
 
-
 type PlatformCount struct {
-	Windows uint32 
-	Linux uint32
-	Mac uint32 
+	Windows uint32
+	Linux   uint32
+	Mac     uint32
 }
 
 func (c *PlatformCount) Serialize() []byte {
@@ -29,15 +29,19 @@ func (c *PlatformCount) Serialize() []byte {
 	return bytes
 }
 
-func DeserializeCounter(bytes []byte) PlatformCount{
+func DeserializeCounter(bytes []byte) (PlatformCount, error) {
+	if len(bytes) != 12 {
+		return PlatformCount{}, fmt.Errorf("invalid counter data")
+	}
+
 	windows := binary.BigEndian.Uint32(bytes[:4])
 	linux := binary.BigEndian.Uint32(bytes[4:8])
 	mac := binary.BigEndian.Uint32(bytes[8:12])
 
-	return PlatformCount{windows, linux, mac}
+	return PlatformCount{windows, linux, mac}, nil
 }
 
-func (c *PlatformCount) Increment (windowsCompatible bool, linuxCompatible bool, macCompatible bool) {
+func (c *PlatformCount) Increment(windowsCompatible bool, linuxCompatible bool, macCompatible bool) {
 	if windowsCompatible {
 		c.Windows++
 	}
@@ -49,3 +53,8 @@ func (c *PlatformCount) Increment (windowsCompatible bool, linuxCompatible bool,
 	}
 }
 
+func (c *PlatformCount) IncrementVals(windowsCompatible uint32, linuxCompatible uint32, macCompatible uint32) {
+	c.Windows += windowsCompatible
+	c.Linux += linuxCompatible
+	c.Mac += macCompatible
+}

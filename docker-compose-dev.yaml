@@ -25,6 +25,15 @@ services:
     networks:
       - testing_net_tp1
 
+  platform_accumulator:
+    container_name: platform_accumulator
+    image: platform_accumulator:latest
+    entrypoint: /platform_accumulator
+    depends_on:
+      - input_controller
+    networks:
+      - testing_net_tp1
+
   genre_filter:
     container_name: genre_filter
     image: genre_filter:latest

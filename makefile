@@ -13,6 +13,7 @@ create_images:
 	docker build -f system/workers/gateway/Dockerfile -t gateway:latest system/
 	docker build -f system/workers/input_controller/Dockerfile -t input_controller:latest system/
 	docker build -f system/workers/platform_counter/Dockerfile -t platform_counter:latest system/
+	docker build -f system/workers/platform_accumulator/Dockerfile -t platform_accumulator:latest system/
 	docker build -f system/workers/genre_filter/Dockerfile -t genre_filter:latest system/
 	docker build -f client/Dockerfile -t client:latest client/
 
@@ -43,6 +44,6 @@ rabbit-up:
 .PHONY: rabbit-up
 
 rabbit-down:
-	docker compose -f docker-compose-rabbit.yaml stop -t 10
+	docker compose -f docker-compose-rabbit.yaml stop -t 1
 	docker compose -f docker-compose-rabbit.yaml down
 .PHONY: rabbit-down

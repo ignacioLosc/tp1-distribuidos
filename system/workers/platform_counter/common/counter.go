@@ -15,7 +15,6 @@ import (
 
 var log = logging.MustGetLogger("log")
 
-
 const (
 	games_to_count   = "games_to_count"
 	count_acumulator = "count_accumulator"
@@ -25,25 +24,23 @@ type PlatformCounterConfig struct {
 	ServerPort string
 }
 
-
 type PlatformCounter struct {
-	config PlatformCounterConfig
+	config     PlatformCounterConfig
 	middleware *mw.Middleware
-	count prot.PlatformCount
-	stop chan bool
+	count      prot.PlatformCount
+	stop       chan bool
 }
 
-
-func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error){
+func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error) {
 	middleware, err := mw.ConnectToMiddleware()
 	if err != nil {
 		return nil, err
 	}
 
 	platformCounter := &PlatformCounter{
-		config: config,
-		stop: make(chan bool),
-		count: prot.PlatformCount{},
+		config:     config,
+		stop:       make(chan bool),
+		count:      prot.PlatformCount{},
 		middleware: middleware,
 	}
 
@@ -56,8 +53,7 @@ func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error){
 	return platformCounter, nil
 }
 
-
-func(p PlatformCounter) middlewareCounterInit() error {
+func (p PlatformCounter) middlewareCounterInit() error {
 	err := p.middleware.DeclareDirectQueue(games_to_count)
 	if err != nil {
 		return err
@@ -72,7 +68,6 @@ func(p PlatformCounter) middlewareCounterInit() error {
 func (p *PlatformCounter) Close() {
 	p.middleware.Close()
 }
-
 
 func (p *PlatformCounter) signalListener(cancel context.CancelFunc) {
 	chSignal := make(chan os.Signal, 1)
@@ -90,17 +85,16 @@ func (p *PlatformCounter) Start() {
 
 	for {
 		select {
-		case <-ctx.Done() :
+		case <-ctx.Done():
 			p.stop <- true
 			return
 		default:
-			p.middleware.ConsumeAndProcess(games_to_count, p.countGames, p.stop)
+			p.middleware.ConsumeAndProcess(games_to_count, p.countGames)
 			err := p.sendResults()
 			if err != nil {
 				log.Error("Error sending results: %v", err)
 				return
 			}
-			log.Info("Restarting results.")
 			p.count.Windows = 0
 			p.count.Linux = 0
 			p.count.Mac = 0
@@ -108,40 +102,38 @@ func (p *PlatformCounter) Start() {
 	}
 }
 
-func (p *PlatformCounter) countGames(msg []byte) error {
-		if string(msg) == "EOF" {
-			p.stop <- true
-			p.stop <- true
-			return nil
-		}
-
-		log.Infof("Received message. Starting to count")
-		lenGames := binary.BigEndian.Uint64(msg[:8])
-		games := make([]protocol.Game, 0)
-
-		index := 8
-		for i := 0; i < int(lenGames); i++ {
-			game, err, j := protocol.DeserializeGame(msg[index:])
-
-			if err != nil {
-				log.Errorf("Failed to deserialize game: %s", err)
-				continue
-			}
-
-			games = append(games, game)
-			index += j
-		}
-
-		for _, game := range games {
-			p.count.Increment(game.WindowsCompatible, game.LinuxCompatible, game.MacCompatible)
-		}
-
-		log.Infof("Platform Counter: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
-
+func (p *PlatformCounter) countGames(msg []byte, finished *bool) error {
+	if string(msg) == "EOF" {
+		log.Info("Received EOF. Stopping")
+		*finished = true
 		return nil
+	}
+
+	log.Infof("Received message. Starting to count")
+	lenGames := binary.BigEndian.Uint64(msg[:8])
+	games := make([]protocol.Game, 0)
+
+	index := 8
+	for i := 0; i < int(lenGames); i++ {
+		game, err, j := protocol.DeserializeGame(msg[index:])
+
+		if err != nil {
+			log.Errorf("Failed to deserialize game: %s", err)
+			continue
+		}
+
+		games = append(games, game)
+		index += j
+	}
+
+	for _, game := range games {
+		p.count.Increment(game.WindowsCompatible, game.LinuxCompatible, game.MacCompatible)
+	}
+
+	log.Infof("Platform Counter: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
+
+	return nil
 }
-
-
 
 func (p *PlatformCounter) sendResults() error {
 	err := p.middleware.PublishInQueue(count_acumulator, p.count.Serialize())

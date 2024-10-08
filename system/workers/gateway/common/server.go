@@ -151,13 +151,13 @@ func (s *Server) receiveMessage(conn net.Conn, channel chan string, ctx context.
 	}
 }
 
-func (s *Server) waitForResults(conn net.Conn, stop chan bool) {
-	returnResults := func(msg []byte) error {
+func (s *Server) waitForResults(conn net.Conn) {
+	returnResults := func(msg []byte, x *bool) error {
 		conn.Write(msg)
 		return nil
 	}
 	log.Infof("action: [WAIT FOR QUERY RESULTS]")
-	go s.middleware.ConsumeAndProcess("results", returnResults, stop)
+	go s.middleware.ConsumeAndProcess("results", returnResults)
 }
 
 func (s *Server) Start() {
@@ -184,7 +184,7 @@ func (s *Server) Start() {
 		}
 
 		s.receiveDatasets(conn, ctx)
-		s.waitForResults(conn, stop)
+		s.waitForResults(conn)
 	}
 }
 

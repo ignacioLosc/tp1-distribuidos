@@ -72,19 +72,18 @@ func (c *Controller) signalListener(cancel context.CancelFunc) {
 func (c *Controller) Start() {
 	log.Info("Starting input controller")
 	ctx, cancel := context.WithCancel(context.Background())
-	stop := make(chan bool)
 
 	go c.signalListener(cancel)
 	// c.InitializeGracefulExit()
 
 	log.Infof("Reading games and reviews")
-	go c.middleware.ConsumeAndProcess("games", c.processGame, stop)
-	go c.middleware.ConsumeAndProcess("reviews", c.processReview, stop)
+	go c.middleware.ConsumeAndProcess("games", c.processGame)
+	go c.middleware.ConsumeAndProcess("reviews", c.processReview)
 
 	<-ctx.Done()
 }
 
-func (c *Controller) processGame(msg []byte) error {
+func (c *Controller) processGame(msg []byte, _ *bool) error {
 	log.Info("Processing batch games")
 	str := string(msg)
 
@@ -122,7 +121,7 @@ func (c *Controller) processGame(msg []byte) error {
 	return nil
 }
 
-func (c *Controller) processReview(msg []byte) error {
+func (c *Controller) processReview(msg []byte, _ *bool) error {
 	// record, err := c.readRecord(msg)
 	// if err != nil { return err}
 

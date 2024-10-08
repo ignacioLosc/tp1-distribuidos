@@ -1,10 +1,12 @@
 package middleware
 
 import (
-	"log"
+	"github.com/op/go-logging"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
+
+var log = logging.MustGetLogger("log")
 
 type Middleware struct {
 	conn   *amqp.Connection
@@ -67,7 +69,7 @@ func (m *Middleware) PublishInQueue(queueName string, message []byte) error {
 	return nil
 }
 
-func (m *Middleware) ConsumeAndProcess(queueName string, processFunction func([]byte) error, stop_chan chan bool) {
+func (m *Middleware) ConsumeAndProcess(queueName string, processFunction func([]byte, *bool) error) {
 	msgs, err := m.ch.Consume(
 		queueName, // queue
 		"",        // consumer
@@ -79,25 +81,26 @@ func (m *Middleware) ConsumeAndProcess(queueName string, processFunction func([]
 	)
 
 	if err != nil {
-		log.Fatalf("Error consuming message: %s", err)
+		log.Errorf("Error consuming message: %s", err)
 		return
 	}
 
-	for {
-		select {
-		case <-stop_chan:
+	finished := false
+
+	for !finished {
+		d, ok := <-msgs
+		if !ok {
 			return
-		default:
-			d, ok := <-msgs
-			if !ok {
-				return
-			}
-			err := processFunction(d.Body)
-			if err != nil {
-				log.Fatalf("Error processing message: %s", err)
-				return
-			}
-			d.Ack(false)
+		}
+		err := processFunction(d.Body, &finished)
+		if err != nil {
+			log.Errorf("Error processing message: %s", err)
+			return
+		}
+		d.Ack(false)
+		if finished {
+			log.Info("Finished processing")
+			return
 		}
 	}
 }

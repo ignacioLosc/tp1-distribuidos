@@ -13,28 +13,25 @@ import (
 
 var log = logging.MustGetLogger("log")
 
-
 const (
 	count_acumulator = "count_accumulator"
-	query_answer1 = "query_answer_1"
+	query_answer1    = "query_answer_1"
 )
 
 type PlatformAccumulatorConfig struct {
 	ServerPort string
-	Peers int
+	Peers      int
 }
-
 
 type PlatformAccumulator struct {
-	config PlatformAccumulatorConfig
+	config     PlatformAccumulatorConfig
 	middleware *mw.Middleware
-	count prot.PlatformCount
-	stop chan bool
-	finished int
+	count      prot.PlatformCount
+	stop       chan bool
+	finished   int
 }
 
-
-func NewPlatformAccumulator(config PlatformAccumulatorConfig) (*PlatformAccumulator, error){
+func NewPlatformAccumulator(config PlatformAccumulatorConfig) (*PlatformAccumulator, error) {
 
 	middleware, err := mw.ConnectToMiddleware()
 	if err != nil {
@@ -42,10 +39,12 @@ func NewPlatformAccumulator(config PlatformAccumulatorConfig) (*PlatformAccumula
 	}
 
 	platformCounter := &PlatformAccumulator{
-		config: config,
-		stop: make(chan bool),
-		count: prot.PlatformCount{},
-	}	
+		config:     config,
+		stop:       make(chan bool),
+		count:      prot.PlatformCount{},
+		middleware: middleware,
+		finished:   0,
+	}
 
 	err = platformCounter.middlewareAccumulatorInit()
 	if err != nil {
@@ -56,7 +55,7 @@ func NewPlatformAccumulator(config PlatformAccumulatorConfig) (*PlatformAccumula
 	return platformCounter, nil
 }
 
-func(p PlatformAccumulator) middlewareAccumulatorInit() error {
+func (p PlatformAccumulator) middlewareAccumulatorInit() error {
 	err := p.middleware.DeclareDirectQueue(count_acumulator)
 	if err != nil {
 		return err
@@ -73,7 +72,6 @@ func (p *PlatformAccumulator) Close() {
 	p.middleware.Close()
 }
 
-
 func (p *PlatformAccumulator) signalListener(cancel context.CancelFunc) {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
@@ -88,39 +86,39 @@ func (p *PlatformAccumulator) Start() {
 
 	go p.signalListener(cancel)
 
-	for { 
+	for {
 		select {
-		case <-ctx.Done() :
-			p.stop <- true
+		case <-ctx.Done():
 			return
 		default:
-			p.middleware.ConsumeAndProcess(count_acumulator, p.countgames, p.stop)
+			p.middleware.ConsumeAndProcess(count_acumulator, p.countGames)
 		}
 
 	}
 }
 
-func (p *PlatformAccumulator) countgames(msg []byte) error {
+func (p *PlatformAccumulator) countGames(msg []byte, _ *bool) error {
 	if string(msg) == "EOF" {
 		p.finished += 1
+	}
+
+	// TODO: SACAR CONSTANTE DE ACA Y PONERLA EN CONFIG
+	if p.finished == 1 {
+		log.Info("Resultado FINAL: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
+
 		return nil
 	}
 
-	if p.finished == p.config.Peers {
-		p.stop <- true
-	}
+	log.Info(msg)
 
-	game, err := prot.DeserializeGame(msg)
+	counter, err := prot.DeserializeCounter(msg)
 	if err != nil {
+		log.Error("Error deserializing counter: %v", err)
 		return err
 	}
+	p.count.IncrementVals(counter.Windows, counter.Linux, counter.Mac)
 
-	p.count.Increment(game.WindowsCompatible, game.LinuxCompatible, game.MacCompatible)
-
-	log.Info("Counter: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
-
-	// Faltaria enviar a respuesta a query_answer 1 cada vez que se recibe una suma
+	log.Info("Counter Resultado PARCIAL : Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
 
 	return nil
 }
-

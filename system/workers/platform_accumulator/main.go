@@ -58,7 +58,7 @@ func PrintConfig(v *viper.Viper) {
 	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | peers_amount: %s",
 		v.GetString("server.port"),
 		v.GetString("log.level"),
-		v.GetString("peers.amount"),
+		v.GetInt("peers.amount"),
 	)
 }
 

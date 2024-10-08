@@ -82,10 +82,9 @@ func (p *GenreFilter) Start() {
 	for {
 		select {
 		case <-ctx.Done():
-			p.stop <- true
 			return
 		default:
-			p.middleware.ConsumeAndProcess(games_to_filter, p.filterGames, p.stop)
+			p.middleware.ConsumeAndProcess(games_to_filter, p.filterGames)
 		}
 
 	}
@@ -111,10 +110,8 @@ func shouldFilter(game prot.Game, filterBy string) (bool, error) {
 	return true, nil
 }
 
-func (p *GenreFilter) filterGames(msg []byte) error {
+func (p *GenreFilter) filterGames(msg []byte, _ *bool) error {
 	if string(msg) == "EOF" {
-		p.stop <- true
-		p.stop <- true
 		return nil
 	}
 
