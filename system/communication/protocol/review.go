@@ -19,7 +19,7 @@ func ReviewFromRecord(record []string) (Review, error) {
 	reviewVotes, err2 := strconv.Atoi(record[4])
 
 	if err1 != nil || err2 != nil {
-		return Review{}, fmt.Errorf("Error parsing record: %v", record[3], record[4])
+		return Review{}, fmt.Errorf("Error parsing record: %v %v", record[3], record[4])
 	}
 
 	return Review {

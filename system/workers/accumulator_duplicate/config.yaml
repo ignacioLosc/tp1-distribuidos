@@ -1,9 +1,0 @@
-accumulator: 
-    field: "platform"
-    queue: "count_accumulator"
-server:
-    port: "5672"
-log:
-    level: "INFO"
-
-

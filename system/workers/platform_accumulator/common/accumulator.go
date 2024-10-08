@@ -16,6 +16,8 @@ var log = logging.MustGetLogger("log")
 const (
 	count_acumulator = "count_accumulator"
 	query_answer1    = "query_answer_1"
+	results_exchange = "results"
+	query_key        = "query1"
 )
 
 type PlatformAccumulatorConfig struct {
@@ -61,10 +63,16 @@ func (p PlatformAccumulator) middlewareAccumulatorInit() error {
 		return err
 	}
 
+	err = p.middleware.DeclareExchange(results_exchange)
+	if err != nil {
+		return err
+	}
+
 	err = p.middleware.DeclareDirectQueue(query_answer1)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -104,12 +112,10 @@ func (p *PlatformAccumulator) countGames(msg []byte, _ *bool) error {
 
 	// TODO: SACAR CONSTANTE DE ACA Y PONERLA EN CONFIG
 	if p.finished == 1 {
-		log.Info("Resultado FINAL: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
-
+		log.Infof("Resultado FINAL: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
+		p.middleware.PublishInExchange(results_exchange, query_key, p.count.Serialize())
 		return nil
 	}
-
-	log.Info(msg)
 
 	counter, err := prot.DeserializeCounter(msg)
 	if err != nil {
@@ -118,7 +124,7 @@ func (p *PlatformAccumulator) countGames(msg []byte, _ *bool) error {
 	}
 	p.count.IncrementVals(counter.Windows, counter.Linux, counter.Mac)
 
-	log.Info("Counter Resultado PARCIAL : Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
+	log.Infof("Counter Resultado PARCIAL : Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
 
 	return nil
 }

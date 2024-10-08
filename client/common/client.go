@@ -46,7 +46,7 @@ func NewClient(config ClientConfig) (*Client, error) {
 func (c *Client) sendCSV(fileReader *bufio.Reader) error {
 	_, err := fileReader.ReadString('\n') // Skipping first CSV line
 	if err != nil {
-		log.Info("Unable to read line from file: %v", err)
+		log.Errorf("Unable to read line from file: %v", err)
 		return err
 	}
 
@@ -88,7 +88,7 @@ func (c *Client) sendCSV(fileReader *bufio.Reader) error {
 			}
 		}
 
-		log.Info("action: sending_batch | len: %d | result: success", len(batch))
+		log.Infof("action: sending_batch | len: %d | result: success", len(batch))
 		err := sendBatchTCP(c.conn, strings.Join(batch, "\n"))
 		if err != nil {
 			return err
@@ -117,7 +117,7 @@ func sendBatchTCP(conn net.Conn, data string) error {
 		return err
 	}
 
-	buffer := []byte(data)	
+	buffer := []byte(data)
 	err = send_all(conn, buffer)
 	if err != nil {
 		return err

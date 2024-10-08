@@ -3,13 +3,14 @@ package common
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"example.com/system/communication/middleware"
 	mw "example.com/system/communication/middleware"
+	"example.com/system/communication/protocol"
 	"github.com/op/go-logging"
 )
 
@@ -72,7 +73,15 @@ func middlewareGatewayInit() (*mw.Middleware, error) {
 	}
 	middleware.DeclareDirectQueue("games")
 	middleware.DeclareDirectQueue("reviews")
-	middleware.DeclareDirectQueue("results")
+
+	middleware.DeclareExchange("results")
+	middleware.DeclareDirectQueue("query_results")
+
+	middleware.BindQueueToExchange("results", "query_results", "query1")
+	middleware.BindQueueToExchange("results", "query_results", "query2")
+	middleware.BindQueueToExchange("results", "query_results", "query3")
+	middleware.BindQueueToExchange("results", "query_results", "query4")
+	middleware.BindQueueToExchange("results", "query_results", "query5")
 
 	return middleware, nil
 }
@@ -95,31 +104,6 @@ func (s *Server) PublishNewMessage(msg string, queue string) error {
 	return nil
 }
 
-func send_all(sock net.Conn, buf []byte) error {
-	totalWritten := 0
-	for totalWritten < len(buf) {
-		size, err := sock.Write(buf[totalWritten:])
-		if err != nil {
-			return fmt.Errorf("failed to write data: %w.", err)
-		}
-		totalWritten += size
-	}
-	return nil
-}
-
-func recv_all(sock net.Conn, sz int) ([]byte, error) {
-	buffer := make([]byte, sz)
-	totalRead := 0
-	for totalRead < len(buffer) {
-		size, err := sock.Read(buffer)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read data: %w. Trying again.", err)
-		}
-		totalRead += size
-	}
-	return buffer, nil
-}
-
 func (s *Server) receiveMessage(conn net.Conn, channel chan string, ctx context.Context) error {
 	for {
 		select {
@@ -127,14 +111,14 @@ func (s *Server) receiveMessage(conn net.Conn, channel chan string, ctx context.
 			log.Infof("action: [RECEIVE] | result: fail | err: context cancelled")
 			return nil
 		default:
-			lenBuffer, err := recv_all(conn, 8)
+			lenBuffer, err := middleware.RecvAll(conn, 8)
 			if err != nil {
 				log.Infof("action: [RECEIVE LEN BUFFER] | result: fail | err: %s", err)
 				return err
 			}
 			lenData := binary.BigEndian.Uint64(lenBuffer)
 
-			data, err := recv_all(conn, int(lenData))
+			data, err := middleware.RecvAll(conn, int(lenData))
 			if err != nil {
 				log.Infof("action: [RECEIVE DATA] | result: fail | err: %s", err)
 				return err
@@ -151,13 +135,27 @@ func (s *Server) receiveMessage(conn net.Conn, channel chan string, ctx context.
 	}
 }
 
-func (s *Server) waitForResults(conn net.Conn) {
-	returnResults := func(msg []byte, x *bool) error {
-		conn.Write(msg)
+func (s *Server) waitForResults(_ net.Conn) {
+	returnResultsCallback := func(msg []byte, routingKey string, x *bool) error {
+		switch routingKey {
+		case "query1":
+			counter, _ :=  protocol.DeserializeCounter(msg)
+			log.Info("Received results for query 1", counter)
+		case "query2":
+			log.Info("Received results for query 2")
+		case "query3":
+			log.Info("Received results for query 3")
+		case "query4":
+			log.Info("Received results for query 4")
+		case "query5":
+			log.Info("Received results for query 5")
+		default:
+			log.Errorf("invalid routing key")
+		}
 		return nil
 	}
-	log.Infof("action: [WAIT FOR QUERY RESULTS]")
-	go s.middleware.ConsumeAndProcess("results", returnResults)
+
+	s.middleware.ConsumeExchange("query_results", returnResultsCallback)
 }
 
 func (s *Server) Start() {
@@ -183,8 +181,8 @@ func (s *Server) Start() {
 			continue
 		}
 
+		go s.waitForResults(conn)
 		s.receiveDatasets(conn, ctx)
-		s.waitForResults(conn)
 	}
 }
 
