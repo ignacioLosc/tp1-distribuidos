@@ -58,7 +58,7 @@ func NewPlatformAccumulator(config PlatformAccumulatorConfig) (*PlatformAccumula
 }
 
 func (p PlatformAccumulator) middlewareAccumulatorInit() error {
-	err := p.middleware.DeclareDirectQueue(count_acumulator)
+	_, err := p.middleware.DeclareDirectQueue(count_acumulator)
 	if err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func (p PlatformAccumulator) middlewareAccumulatorInit() error {
 		return err
 	}
 
-	err = p.middleware.DeclareDirectQueue(query_answer1)
+	_, err = p.middleware.DeclareDirectQueue(query_answer1)
 	if err != nil {
 		return err
 	}

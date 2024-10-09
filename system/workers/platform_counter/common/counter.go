@@ -54,11 +54,12 @@ func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error) 
 }
 
 func (p PlatformCounter) middlewareCounterInit() error {
-	err := p.middleware.DeclareDirectQueue(games_to_count)
+	_, err := p.middleware.DeclareDirectQueue(games_to_count)
 	if err != nil {
 		return err
 	}
-	err = p.middleware.DeclareDirectQueue(count_acumulator)
+
+	_, err = p.middleware.DeclareDirectQueue(count_acumulator)
 	if err != nil {
 		return err
 	}

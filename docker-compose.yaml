@@ -134,6 +134,78 @@ services:
     networks:
       - testing_net_tp1
 
+  joiner1:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "joiner"
+    container_name: joiner1
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+      - CLI_JOINER_ID=1
+      - CLI_JOINER_GENRE=Shooter
+    entrypoint: /app/joiner
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
+  joiner2:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "joiner"
+    container_name: joiner2
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+      - CLI_JOINER_ID=2
+      - CLI_JOINER_GENRE=Shooter
+    entrypoint: /app/joiner
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
+  joiner3:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "joiner"
+    container_name: joiner3
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+      - CLI_JOINER_ID=3
+      - CLI_JOINER_GENRE=Shooter
+    entrypoint: /app/joiner
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
+  joiner4:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "joiner"
+    container_name: joiner4
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+      - CLI_JOINER_ID=4
+      - CLI_JOINER_GENRE=Shooter
+    entrypoint: /app/joiner
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
 networks:
   testing_net_tp1:
     external: true

@@ -51,7 +51,7 @@ func NewGenreFilter(config GenreFilterConfig) (*GenreFilter, error) {
 }
 
 func (c *GenreFilter) middlewareInit() error {
-	err := c.middleware.DeclareDirectQueue(games_to_filter)
+	_, err := c.middleware.DeclareDirectQueue(games_to_filter)
 	if err != nil {
 		return err
 	}
@@ -104,22 +104,24 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 		return err
 	}
 
-	decade := string(year - (year % 10))
+	decade := strconv.Itoa(year - (year % 10))
 
 	appId, err := strconv.Atoi(game.AppID)
 	if err != nil {
 		return err
 	}
 
-	appIdRange := string(appId % 10)
+	appIdRange := strconv.Itoa(appId % 10)
 
 	if strings.Contains(game.Genres, "Indie") {
-		err = p.middleware.PublishInExchange(filtered_games, fmt.Sprintf("indie.%s.%s", decade, appIdRange), prot.SerializeGame(&game))
+		t := fmt.Sprintf("indie.%s.%s", decade, appIdRange)
+		err = p.middleware.PublishInExchange(filtered_games, t, prot.SerializeGame(&game))
 		if err != nil {
 			return err
 		}
 	} else if strings.Contains(game.Genres, "Shooter") {
-		err = p.middleware.PublishInExchange(filtered_games, fmt.Sprintf("shooter.%s.%s", decade, appIdRange), prot.SerializeGame(&game))
+		t := fmt.Sprintf("shooter.%s.%s", decade, appIdRange)
+		err = p.middleware.PublishInExchange(filtered_games, t, prot.SerializeGame(&game))
 		if err != nil {
 			return err
 		}

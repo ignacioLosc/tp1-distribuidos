@@ -33,7 +33,7 @@ func ConnectToMiddleware() (*Middleware, error) {
 	return m, nil
 }
 
-func (m *Middleware) DeclareDirectQueue(name string) error {
+func (m *Middleware) DeclareDirectQueue(name string) (string, error) {
 	q, err := m.ch.QueueDeclare(
 		name,  // name
 		true,  // durable
@@ -44,11 +44,11 @@ func (m *Middleware) DeclareDirectQueue(name string) error {
 	)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	m.queues[name] = q
-	return nil
+	m.queues[q.Name] = q
+	return q.Name, nil
 }
 
 func (m *Middleware) DeclareExchange(name string, exchangeType string) error {

@@ -60,11 +60,13 @@ func (c *Sorter) middlewareInit() error {
 		log.Errorf("Error declaring filtered_games exchange")
 		return err
 	}
-	err = c.middleware.DeclareDirectQueue(results_from_filter)
+
+	_, err = c.middleware.DeclareDirectQueue(results_from_filter)
 	if err != nil {
 		log.Errorf("Error declaring results_from_filter queue")
 		return err
 	}
+
 	err = c.middleware.BindQueueToExchange(filtered_games, results_from_filter, "indie.2010.*")
 	if err != nil {
 		log.Errorf("Error binding queue to filtered_games exchange")

@@ -30,9 +30,11 @@ type JoinerConfig struct {
 }
 
 type Joiner struct {
-	middleware *middleware.Middleware
-	config     JoinerConfig
-	savedGames []protocol.Game
+	middleware   *middleware.Middleware
+	config       JoinerConfig
+	savedGames   []protocol.Game
+	gamesQueue   string
+	reviewsQueue string
 }
 
 func NewJoiner(config JoinerConfig) (*Joiner, error) {
@@ -56,15 +58,19 @@ func NewJoiner(config JoinerConfig) (*Joiner, error) {
 }
 
 func (c *Joiner) middlewareInit() error {
-	err := c.middleware.DeclareDirectQueue(games_queue)
+	name, err := c.middleware.DeclareDirectQueue("")
 	if err != nil {
 		return err
 	}
 
-	err = c.middleware.DeclareDirectQueue(reviews_queue)
+	c.gamesQueue = name
+
+	name, err = c.middleware.DeclareDirectQueue("")
 	if err != nil {
 		return err
 	}
+
+	c.reviewsQueue = name
 
 	err = c.middleware.DeclareExchange(filtered_games, "topic")
 	if err != nil {
@@ -77,13 +83,13 @@ func (c *Joiner) middlewareInit() error {
 	}
 
 	topic := strings.ToLower(fmt.Sprintf("%s.*.%s", c.config.Genre, c.config.Id))
-	err = c.middleware.BindQueueToExchange(filtered_games, games_queue, topic)
+	err = c.middleware.BindQueueToExchange(filtered_games, c.gamesQueue, topic)
 	if err != nil {
 		log.Errorf("Error binding games queue to exchange: %s", err)
 		return err
 	}
 
-	err = c.middleware.BindQueueToExchange(filtered_reviews, reviews_queue, c.config.Id)
+	err = c.middleware.BindQueueToExchange(filtered_reviews, c.reviewsQueue, c.config.Id)
 	if err != nil {
 		log.Errorf("Error binding reviews queue to exchange: %s", err)
 		return err
@@ -92,33 +98,35 @@ func (c *Joiner) middlewareInit() error {
 	return nil
 }
 
-func (c *Joiner) Close() {
-	c.middleware.Close()
+func (j *Joiner) Close() {
+	j.middleware.Close()
 }
 
-func (c *Joiner) signalListener(cancel context.CancelFunc) {
+func (j *Joiner) signalListener(cancel context.CancelFunc) {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 	<-chSignal
 	cancel()
 }
 
-func (p *Joiner) Start() {
+func (j *Joiner) Start() {
 	log.Info("Starting joiner")
-	defer p.Close()
+	defer j.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go p.signalListener(cancel)
+	go j.signalListener(cancel)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			p.middleware.ConsumeAndProcess(games_queue, p.saveGames)
+			log.Info("QUEUE NAME: ", j.gamesQueue)
+			j.middleware.ConsumeAndProcess(j.gamesQueue, j.saveGames)
 
-			p.middleware.ConsumeAndProcess(reviews_queue, p.joinReviewsAndGames)
+			log.Info("QUEUE NAME: ", j.reviewsQueue)
+			j.middleware.ConsumeAndProcess(j.reviewsQueue, j.joinReviewsAndGames)
 
 			time.Sleep(5 * time.Second)
 		}

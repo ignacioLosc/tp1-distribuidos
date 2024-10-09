@@ -53,7 +53,7 @@ func NewReviewMapper(config ReviewMapperConfig) (*ReviewMapper, error) {
 }
 
 func (p ReviewMapper) middlewareCounterInit() error {
-	err := p.middleware.DeclareDirectQueue(reviews)
+	_, err := p.middleware.DeclareDirectQueue(reviews)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 
 	lenReviews := binary.BigEndian.Uint64(msg[:8])
 
-	log.Infof("Received %d reviews. WITH BUFFER LENGTH: %d", lenReviews, len(msg))
+	// log.Infof("Received %d reviews. WITH BUFFER LENGTH: %d", lenReviews, len(msg))
 
 	index := 8
 	for i := 0; i < int(lenReviews); i++ {
@@ -152,7 +152,7 @@ func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 }
 
 func (p *ReviewMapper) sendReview(review []byte, gameRange int) error {
-	err := p.middleware.PublishInExchange(filtered_reviews, fmt.Sprintf("%s", gameRange), review)
+	err := p.middleware.PublishInExchange(filtered_reviews, fmt.Sprintf("%s", string(gameRange)), review)
 	if err != nil {
 		return err
 	}
