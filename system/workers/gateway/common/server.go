@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -135,12 +136,17 @@ func (s *Server) receiveMessage(conn net.Conn, channel chan string, ctx context.
 	}
 }
 
-func (s *Server) waitForResults(_ net.Conn) {
+func (s *Server) waitForResults(conn net.Conn) {
 	returnResultsCallback := func(msg []byte, routingKey string, x *bool) error {
+		stringResult := ""
 		switch routingKey {
 		case "query1":
-			counter, _ :=  protocol.DeserializeCounter(msg)
+			counter, err :=  protocol.DeserializeCounter(msg)
+			if err != nil {
+				return fmt.Errorf("failed to deserialize counter: %w.", err)
+			}
 			log.Info("Received results for query 1", counter)
+			stringResult = fmt.Sprintf("QUERY 1 RESULTS: Windows: %d, Linux: %d, Mac: %d", counter.Windows, counter.Linux, counter.Mac)
 		case "query2":
 			log.Info("Received results for query 2")
 		case "query3":
@@ -152,6 +158,19 @@ func (s *Server) waitForResults(_ net.Conn) {
 		default:
 			log.Errorf("invalid routing key")
 		}
+
+		lenBuffer := make([]byte, 8)
+		binary.BigEndian.PutUint64(lenBuffer, uint64(len(stringResult)))
+		err := mw.SendAll(conn, lenBuffer)
+		if err != nil {
+			return fmt.Errorf("failed to write data: %w.", err)
+		}
+
+		err = mw.SendAll(conn, []byte(stringResult))
+		if err != nil {
+			return fmt.Errorf("failed to write data: %w.", err)
+		}
+
 		return nil
 	}
 
