@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"os"
 	"os/signal"
 	"strconv"
@@ -19,6 +20,7 @@ var log = logging.MustGetLogger("log")
 
 const (
 	games_to_filter = "games_to_filter"
+	filtered_games  = "filtered_games"
 )
 
 type GenreFilterConfig struct {
@@ -49,11 +51,12 @@ func NewGenreFilter(config GenreFilterConfig) (*GenreFilter, error) {
 }
 
 func (c *GenreFilter) middlewareInit() error {
-	err := c.middleware.DeclareDirectQueue("games")
+	err := c.middleware.DeclareDirectQueue(games_to_filter)
 	if err != nil {
 		return err
 	}
-	err = c.middleware.DeclareDirectQueue(games_to_filter)
+
+	err = c.middleware.DeclareExchange(filtered_games, "topic")
 	if err != nil {
 		return err
 	}
@@ -94,20 +97,37 @@ func parseDate(releaseDate string) (int, error) {
 	return strconv.Atoi(releaseDate[len(releaseDate)-4:])
 }
 
-func shouldFilter(game prot.Game, filterBy string) (bool, error) {
-	if filterBy == "decade" {
-		decade, err := parseDate(game.ReleaseDate)
-		if err != nil {
-			log.Errorf("Failed to parse decade: %s", game.ReleaseDate)
-			return false, err
-		}
-		return decade >= 2020 || decade < 2009, nil
-	} else if filterBy == "genre.indie" {
-		return strings.Contains(game.Genres, "Indie"), nil
-	} else if filterBy == "genre.shooter" {
-		return strings.Contains(game.Genres, "Shooter"), nil
+func (p *GenreFilter) filterGame(game prot.Game) error {
+	year, err := parseDate(game.ReleaseDate)
+	if err != nil {
+		log.Errorf("Failed to parse decade: %s", game.ReleaseDate)
+		return err
 	}
-	return true, nil
+
+	decade := year - (year % 10)
+
+	appId, err := strconv.Atoi(game.AppID)
+	if err != nil {
+		return err
+	}
+
+	appIdRange := appId % 10
+
+	if strings.Contains(game.Genres, "Indie") {
+		log.Info("Sending game:", game.AppID, game.ReleaseDate)
+		err = p.middleware.PublishInExchange(filtered_games, fmt.Sprintf("indie.%s.%s", decade, appIdRange), prot.SerializeGame(&game))
+		if err != nil {
+			return err
+		}
+	} else if strings.Contains(game.Genres, "Shooter") {
+		log.Info("Sending game:", game.AppID, game.ReleaseDate)
+		err = p.middleware.PublishInExchange(filtered_games, fmt.Sprintf("shooter.%s.%s", decade, appIdRange), prot.SerializeGame(&game))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (p *GenreFilter) filterGames(msg []byte, _ *bool) error {
@@ -116,7 +136,6 @@ func (p *GenreFilter) filterGames(msg []byte, _ *bool) error {
 	}
 
 	lenGames := binary.BigEndian.Uint64(msg[:8])
-	games := make([]protocol.Game, 0)
 
 	index := 8
 	for i := 0; i < int(lenGames); i++ {
@@ -127,34 +146,12 @@ func (p *GenreFilter) filterGames(msg []byte, _ *bool) error {
 			continue
 		}
 
-		// Can be set by config
-		filterBy := "decade"
-
-		shouldFilter, err := shouldFilter(game, filterBy)
+		err = p.filterGame(game)
 		if err != nil {
 			return err
 		}
-		if !shouldFilter {
-			log.Info("Sending game:", game.AppID, game.ReleaseDate, shouldFilter)
-			games = append(games, game)
-		}
 
 		index += j
-	}
-
-	gamesBuffer := make([]byte, 8)
-	l := len(games)
-	binary.BigEndian.PutUint64(gamesBuffer, uint64(l))
-
-	for _, game := range games {
-		gameBuffer := protocol.SerializeGame(&game)
-		gamesBuffer = append(gamesBuffer, gameBuffer...)
-	}
-
-	// Can receive queue name by config
-	err := p.middleware.PublishInQueue("indie_games", gamesBuffer)
-	if err != nil {
-		return err
 	}
 
 	return nil

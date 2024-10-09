@@ -54,15 +54,15 @@ func (m *Middleware) DeclareDirectQueue(name string) error {
 	return nil
 }
 
-func (m *Middleware) DeclareExchange(name string) error {
+func (m *Middleware) DeclareExchange(name string, exchangeType string) error {
 	return m.ch.ExchangeDeclare(
-		name,     // name
-		"direct", // type
-		true,     // durable
-		false,    // auto-deleted
-		false,    // internal
-		false,    // no-wait
-		nil,      // arguments
+		name,         // name
+		exchangeType, // type
+		true,         // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // no-wait
+		nil,          // arguments
 	)
 }
 
@@ -177,7 +177,6 @@ func (m *Middleware) ConsumeExchange(queueName string, processFunction func([]by
 		}
 	}
 }
-
 
 func SendAll(sock net.Conn, buf []byte) error {
 	totalWritten := 0

@@ -43,6 +43,15 @@ services:
     networks:
       - testing_net_tp1
 
+  time_played_sorter:
+    container_name: time_played_sorter
+    image: time_played_sorter:latest
+    entrypoint: /time_played_sorter
+    depends_on:
+      - input_controller
+    networks:
+      - testing_net_tp1
+
   client:
     container_name: client
     image:  client:latest

@@ -75,7 +75,7 @@ func middlewareGatewayInit() (*mw.Middleware, error) {
 	middleware.DeclareDirectQueue("games")
 	middleware.DeclareDirectQueue("reviews")
 
-	middleware.DeclareExchange("results")
+	middleware.DeclareExchange("results", "direct")
 	middleware.DeclareDirectQueue("query_results")
 
 	middleware.BindQueueToExchange("results", "query_results", "query1")
@@ -141,7 +141,7 @@ func (s *Server) waitForResults(conn net.Conn) {
 		stringResult := ""
 		switch routingKey {
 		case "query1":
-			counter, err :=  protocol.DeserializeCounter(msg)
+			counter, err := protocol.DeserializeCounter(msg)
 			if err != nil {
 				return fmt.Errorf("failed to deserialize counter: %w.", err)
 			}

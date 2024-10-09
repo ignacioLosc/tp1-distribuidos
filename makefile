@@ -15,6 +15,7 @@ create_images:
 	docker build -f system/workers/platform_counter/Dockerfile -t platform_counter:latest system/
 	docker build -f system/workers/platform_accumulator/Dockerfile -t platform_accumulator:latest system/
 	docker build -f system/workers/genre_filter/Dockerfile -t genre_filter:latest system/
+	docker build -f system/workers/time_played_sorter/Dockerfile -t time_played_sorter:latest system/
 	docker build -f client/Dockerfile -t client:latest client/
 
 system-up: create_base_images create_images network-create

@@ -63,7 +63,7 @@ func (p PlatformAccumulator) middlewareAccumulatorInit() error {
 		return err
 	}
 
-	err = p.middleware.DeclareExchange(results_exchange)
+	err = p.middleware.DeclareExchange(results_exchange, "direct")
 	if err != nil {
 		return err
 	}
