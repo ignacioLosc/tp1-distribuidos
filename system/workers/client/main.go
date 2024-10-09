@@ -1,11 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
-	"example.com/client/common"
+	"example.com/system/workers/client/common"
 	"github.com/op/go-logging"
 	"github.com/spf13/viper"
 )
@@ -15,23 +14,14 @@ var log = logging.MustGetLogger("log")
 func InitConfig() (*viper.Viper, error) {
 	v := viper.New()
 
-	//Configure viper to read env variables with the CLI_ prefix
 	v.AutomaticEnv()
 	v.SetEnvPrefix("cli")
 
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	// Add env variables supported
 	v.BindEnv("server", "address")
 	v.BindEnv("log", "level")
 	v.BindEnv("data_path", "path")
-
-	// Tries to read config or check envs
-
-	v.SetConfigFile("config.yaml")
-	if err := v.ReadInConfig(); err != nil {
-		fmt.Printf("Configuration could not be read from config.file. using env variables instead")
-	}
 
 	return v, nil
 }
@@ -87,6 +77,5 @@ func main() {
 		log.Criticalf("%s", err)
 	}
 
-	fmt.Println("Starting Client")
 	client.Start()
 }

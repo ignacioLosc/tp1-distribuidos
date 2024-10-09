@@ -1,15 +1,18 @@
 package common
 
 import (
+	"bufio"
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
-	"example.com/client/utils"
+	"example.com/system/communication/utils"
 	"github.com/op/go-logging"
 )
 
@@ -84,13 +87,13 @@ func (c *Client) waitForResults() {
 }
 
 func (c *Client) sendFiles() {
-	gamesFile, gamesReader, err := utils.OpenFile("games.csv")
+	gamesFile, gamesReader, err := OpenFile("games.csv")
 	if err != nil {
 		log.Error("Unable to open games file: ", err)
 		return
 	}
 
-	reviewsFile, reviewsReader, err := utils.OpenFile("dataset.csv")
+	reviewsFile, reviewsReader, err := OpenFile("dataset.csv")
 	if err != nil {
 		log.Error("Unable to open reviews file: ", err)
 		return
@@ -100,7 +103,7 @@ func (c *Client) sendFiles() {
 	defer reviewsFile.Close()
 
 	log.Info("action: [BEGIN] sending_games")
-	err = utils.SendCSV(c.conn, gamesReader)
+	err = SendCSV(c.conn, gamesReader)
 	if err != nil {
 		log.Error("action: sending_games | result: error ")
 		return
@@ -108,7 +111,7 @@ func (c *Client) sendFiles() {
 	log.Info("action: sent_games | result: success ")
 
 	log.Info("action: [BEGIN] sending_reviews")
-	err = utils.SendCSV(c.conn, reviewsReader)
+	err = SendCSV(c.conn, reviewsReader)
 	if err != nil {
 		log.Errorf("action: sending_reviews | result: error ")
 		return
@@ -122,4 +125,85 @@ func handleSignals(_ context.Context, cancel context.CancelFunc) {
 	<-chSignal
 	cancel()
 	signal.Stop(chSignal)
+}
+
+func SendBatchTCP(conn net.Conn, data string) error {
+	lenBuffer := make([]byte, 8)
+	binary.BigEndian.PutUint64(lenBuffer, uint64(len(data)))
+	err := utils.SendAll(conn, lenBuffer)
+	if err != nil {
+		return err
+	}
+
+	buffer := []byte(data)
+	err = utils.SendAll(conn, buffer)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func OpenFile(filePath string) (*os.File, *bufio.Reader, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		log.Errorf("Unable to read input file: %v", err)
+		return nil, nil, err
+	}
+	fileReader := bufio.NewReader(f)
+	return f, fileReader, nil
+}
+
+func SendCSV(conn net.Conn, fileReader *bufio.Reader) error {
+	_, err := fileReader.ReadString('\n') // Skipping first CSV line
+	if err != nil {
+		log.Errorf("Unable to read line from file: %v", err)
+		return err
+	}
+
+	var batch []string
+	batchSize := 10
+
+	for {
+		for len(batch) < batchSize {
+			line, err := fileReader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					log.Info("action: EOF_games | result: success")
+					SendBatchTCP(conn, "EOF")
+					return nil
+				}
+
+				if len(batch) > 0 {
+					err = SendBatchTCP(conn, strings.Join(batch, "\n"))
+					if err != nil {
+						return err
+					}
+				}
+
+				log.Info("Unable to read line from file: %v", err)
+				return err
+			}
+
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+
+			batch = append(batch, line)
+
+			// MaxBufferSize := 65536
+			MaxBufferSize := 500
+			if len(strings.Join(batch, "\n")) >= MaxBufferSize {
+				break
+			}
+		}
+
+		log.Infof("action: sending_batch | len: %d | result: success", len(batch))
+		err := SendBatchTCP(conn, strings.Join(batch, "\n"))
+		if err != nil {
+			return err
+		}
+		batch = batch[:0] // Reset the batch
+	}
 }

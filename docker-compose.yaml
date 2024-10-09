@@ -3,15 +3,18 @@ services:
   client:
     build:
       context: .
-      dockerfile: ./client/Dockerfile
+      dockerfile: ./system/Dockerfile
       args:
         WORKER: "client"
     container_name: client
-    entrypoint: /client
+    entrypoint: /app/client
+    environment:
+      - CLI_SERVER_ADDRESS=gateway:5555
+      - CLI_LOG_LEVEL=INFO
+      - CLI_DATA_PATH=.data
     volumes:
-      - ./.data/games.csv:/games.csv
-      - ./.data/dataset.csv:/dataset.csv
-      - ./client/config.yaml:/config.yaml
+      - ./.data/games.csv:/app/games.csv
+      - ./.data/dataset.csv:/app/dataset.csv
     networks:
       - testing_net_tp1
 
