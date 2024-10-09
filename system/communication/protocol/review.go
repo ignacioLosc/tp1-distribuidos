@@ -49,18 +49,39 @@ func SerializeReview(review *Review) []byte {
 	return bytes
 }
 
-func DeserializeReview(bytes []byte) (Review, error) {
-	appIdLen := uint64(bytes[0])
-	appId := string(bytes[1:appIdLen+1])
+func DeserializeReview(bytes []byte) (Review, error, int) {
+	index := 0
+	errorMessage := fmt.Errorf("Not enough bytes to deserialize review")
+	if len(bytes) < 1 {
+		return Review{}, errorMessage, 0
+	}
 
-	reviewScore := int8(bytes[appIdLen+1])
+	appIdLen := uint64(bytes[index])
+	index++
 
-	reviewTextLen := binary.BigEndian.Uint64(bytes[appIdLen+2:appIdLen+10])
-	reviewText := string(bytes[appIdLen+10:appIdLen+10+reviewTextLen])
+	if len(bytes) < int(appIdLen)+10 {
+		return Review{}, errorMessage, 0
+	}
+
+	appId := string(bytes[index:appIdLen+1])
+	index += int(appIdLen)+1
+
+	reviewScore := int8(bytes[index])
+	index++
+
+	reviewTextLen := binary.BigEndian.Uint64(bytes[index:index+8])
+	index += 8
+
+	if len(bytes) < index+int(reviewTextLen) {
+		return Review{}, errorMessage, 0
+	}
+
+	reviewText := string(bytes[index:index+int(reviewTextLen)])
+	index += int(reviewTextLen)
 
 	return Review {
 		AppID:       appId,
 		ReviewScore: reviewScore,
 		ReviewText:  reviewText,
-	}, nil
+	}, nil, index
 }
