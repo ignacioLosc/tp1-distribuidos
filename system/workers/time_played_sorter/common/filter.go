@@ -61,7 +61,7 @@ func (c *Sorter) middlewareInit() error {
 	if err != nil {
 		return err
 	}
-	err = c.middleware.BindQueueToExchange(filtered_games, results_from_filter, "indie.10.*")
+	err = c.middleware.BindQueueToExchange(filtered_games, results_from_filter, "indie.2010.*")
 	if err != nil {
 		return err
 	}
