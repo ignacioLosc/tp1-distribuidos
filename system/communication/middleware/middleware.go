@@ -1,9 +1,6 @@
 package middleware
 
 import (
-	"fmt"
-	"net"
-
 	"github.com/op/go-logging"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -176,29 +173,4 @@ func (m *Middleware) ConsumeExchange(queueName string, processFunction func([]by
 			return
 		}
 	}
-}
-
-func SendAll(sock net.Conn, buf []byte) error {
-	totalWritten := 0
-	for totalWritten < len(buf) {
-		size, err := sock.Write(buf[totalWritten:])
-		if err != nil {
-			return fmt.Errorf("failed to write data: %w.", err)
-		}
-		totalWritten += size
-	}
-	return nil
-}
-
-func RecvAll(sock net.Conn, sz int) ([]byte, error) {
-	buffer := make([]byte, sz)
-	totalRead := 0
-	for totalRead < len(buffer) {
-		size, err := sock.Read(buffer)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read data: %w. Trying again.", err)
-		}
-		totalRead += size
-	}
-	return buffer, nil
 }
