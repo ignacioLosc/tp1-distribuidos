@@ -33,6 +33,18 @@ func ConnectToMiddleware() (*Middleware, error) {
 	return m, nil
 }
 
+func (m *Middleware) DeleteQueue(name string) error {
+	_, ok := m.queues[name]
+	if !ok {
+		return nil
+	}
+
+	m.queues[name] = amqp.Queue{}
+	_, err := m.ch.QueueDelete(name, false, false, false)
+
+	return err
+} 
+
 func (m *Middleware) DeclareDirectQueue(name string) (string, error) {
 	q, err := m.ch.QueueDeclare(
 		name,  // name

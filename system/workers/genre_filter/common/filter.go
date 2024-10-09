@@ -21,6 +21,7 @@ var log = logging.MustGetLogger("log")
 const (
 	games_to_filter = "games_to_filter"
 	filtered_games  = "filtered_games"
+	LEN_JOINERS     = 5
 )
 
 type GenreFilterConfig struct {
@@ -111,7 +112,7 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 		return err
 	}
 
-	appIdRange := strconv.Itoa(appId % 10)
+	appIdRange := strconv.Itoa(appId % LEN_JOINERS)
 
 	if strings.Contains(game.Genres, "Indie") {
 		t := fmt.Sprintf("indie.%s.%s", decade, appIdRange)

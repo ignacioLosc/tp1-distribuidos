@@ -99,6 +99,9 @@ func (c *Joiner) middlewareInit() error {
 }
 
 func (j *Joiner) Close() {
+	j.middleware.DeleteQueue(j.gamesQueue)
+	j.middleware.DeleteQueue(j.reviewsQueue)
+
 	j.middleware.Close()
 }
 

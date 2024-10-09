@@ -19,6 +19,7 @@ var log = logging.MustGetLogger("log")
 const (
 	reviews          = "reviews"
 	filtered_reviews = "filtered_reviews"
+	LEN_JOINERS      = 5
 )
 
 type ReviewMapperConfig struct {
@@ -137,7 +138,7 @@ func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 		if err != nil {
 			return err
 		}
-		gameRange := appId % 10
+		gameRange := appId % LEN_JOINERS
 
 		err = p.sendReview(reviewBuffer, gameRange)
 		if err != nil {
