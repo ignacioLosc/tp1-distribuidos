@@ -12,17 +12,17 @@ import (
 var log = logging.MustGetLogger("log")
 
 func InitConfig() (*viper.Viper, error) {
-    v := viper.New()
+	v := viper.New()
 
-    v.AutomaticEnv()
-    v.SetEnvPrefix("cli")
+	v.AutomaticEnv()
+	v.SetEnvPrefix("cli")
 
-    v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-    v.BindEnv("server", "port")
-    v.BindEnv("log", "level")
+	v.BindEnv("server", "port")
+	v.BindEnv("log", "level")
 
-    return v,nil
+	return v, nil
 }
 func InitLogger(logLevel string) error {
 	baseBackend := logging.NewLogBackend(os.Stdout, "", 0)
@@ -44,37 +44,33 @@ func InitLogger(logLevel string) error {
 }
 
 func PrintConfig(v *viper.Viper) {
-    log.Infof("action: config | result: sucess | server_port: %s | log_level: %s",
-            v.GetString("server.port"),
-            v.GetString("log.level"),
-    )
+	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s",
+		v.GetString("server.port"),
+		v.GetString("log.level"),
+	)
 }
-
 
 func main() {
-    v , err := InitConfig()
-    if err != nil {
-        log.Criticalf("%s", err)
-    }
+	v, err := InitConfig()
+	if err != nil {
+		log.Criticalf("%s", err)
+	}
 
-    if err := InitLogger(v.GetString("log.level")); err != nil {
-        log.Criticalf("%s", err)
-    }
+	if err := InitLogger(v.GetString("log.level")); err != nil {
+		log.Criticalf("%s", err)
+	}
 
-    PrintConfig(v)
+	PrintConfig(v)
 
-    config := common.ServerConfig{
-        ServerPort: v.GetString("server.port"),
-    }
-    server , err := common.NewServer(config)
+	config := common.ServerConfig{
+		ServerPort: v.GetString("server.port"),
+	}
+	server, err := common.NewServer(config)
 
-    if err != nil {
-        log.Critical("action: bind server | result: fail | err: %s", err)
-        return
-    }
+	if err != nil {
+		log.Critical("action: bind server | result: fail | err: %s", err)
+		return
+	}
 
-    server.Start()
-
-
+	server.Start()
 }
-

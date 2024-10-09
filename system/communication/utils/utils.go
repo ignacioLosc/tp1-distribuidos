@@ -4,7 +4,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+
+	"github.com/op/go-logging"
 )
+
+var log = logging.MustGetLogger("log")
 
 func SendAll(sock net.Conn, buf []byte) error {
 	totalWritten := 0
@@ -19,6 +23,9 @@ func SendAll(sock net.Conn, buf []byte) error {
 }
 
 func RecvAll(sock net.Conn, sz int) ([]byte, error) {
+	if sz < 0 {
+		return nil, fmt.Errorf("invalid size to read from buffer: %d", sz)
+	}
 	buffer := make([]byte, sz)
 	totalRead := 0
 	for totalRead < len(buffer) {
@@ -31,19 +38,18 @@ func RecvAll(sock net.Conn, sz int) ([]byte, error) {
 	return buffer, nil
 }
 
-func DeserealizeString(conn net.Conn) (string, error) {
+func DeserealizeString(conn net.Conn) ([]byte, error) {
 	lenBuffer, err := RecvAll(conn, 8)
 	if err != nil {
-		return "", fmt.Errorf("failed to read len of data: %w.", err)
+		return nil, fmt.Errorf("failed to read len of data: %w.", err)
 	}
 	lenData := binary.BigEndian.Uint64(lenBuffer)
 
 	data, err := RecvAll(conn, int(lenData))
 	if err != nil {
-		return "", fmt.Errorf("failed to read data: %w.", err)
+		return nil, fmt.Errorf("failed to read data: %w.", err)
 	}
-
-	return string(data), nil
+	return data, nil
 }
 
 func SerializeString(data string) ([]byte, error) {

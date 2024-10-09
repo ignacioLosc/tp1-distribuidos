@@ -24,8 +24,8 @@ type Server struct {
 	listener    net.Listener
 	config      ServerConfig
 	middleware  *mw.Middleware
-	gamesChan   chan string
-	reviewsChan chan string
+	gamesChan   chan []byte
+	reviewsChan chan []byte
 }
 
 func NewServer(config ServerConfig) (*Server, error) {
@@ -39,8 +39,8 @@ func NewServer(config ServerConfig) (*Server, error) {
 	server := &Server{
 		listener:    listener,
 		config:      config,
-		gamesChan:   make(chan string),
-		reviewsChan: make(chan string),
+		gamesChan:   make(chan []byte),
+		reviewsChan: make(chan []byte),
 	}
 
 	server.middleware, err = middlewareGatewayInit()
@@ -71,7 +71,8 @@ func middlewareGatewayInit() (*mw.Middleware, error) {
 	if err != nil {
 		return nil, err
 	}
-	middleware.DeclareDirectQueue("games")
+	middleware.DeclareDirectQueue("games_to_count")
+	middleware.DeclareDirectQueue("games_to_filter")
 	middleware.DeclareDirectQueue("reviews")
 
 	middleware.DeclareExchange("results", "direct")
@@ -86,7 +87,7 @@ func middlewareGatewayInit() (*mw.Middleware, error) {
 	return middleware, nil
 }
 
-func (s *Server) receiveMessage(conn net.Conn, channel chan string, ctx context.Context) error {
+func (s *Server) receiveMessage(conn net.Conn, channel chan []byte, ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -100,7 +101,7 @@ func (s *Server) receiveMessage(conn net.Conn, channel chan string, ctx context.
 
 			channel <- message
 
-			if message == "EOF" {
+			if string(message) == "EOF" {
 				return nil
 			}
 			continue
@@ -201,10 +202,11 @@ func (s *Server) listenOnChannels(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case game := <-s.gamesChan:
-			s.middleware.PublishInQueue("games", []byte(game))
+		case games := <-s.gamesChan:
+			s.middleware.PublishInQueue("games_to_count", games)
+			s.middleware.PublishInQueue("games_to_filter", games)
 		case review := <-s.reviewsChan:
-			s.middleware.PublishInQueue("reviews", []byte(review))
+			s.middleware.PublishInQueue("reviews", review)
 		}
 	}
 }

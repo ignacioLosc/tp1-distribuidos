@@ -6,7 +6,7 @@ remove_old:
 	docker rmi `docker images --filter label=intermediateStageToBeDeleted=true -q`
 
 down:
-	docker compose -f docker-compose.yaml stop -t 3
+	docker compose -f docker-compose.yaml stop -t 1
 	docker compose -f docker-compose.yaml down
 .PHONY: down
 
@@ -27,6 +27,6 @@ rabbit-up:
 .PHONY: rabbit-up
 
 rabbit-down:
-	docker stop rabbitmq
+	docker stop rabbitmq -t 1
 	docker rm rabbitmq
 .PHONY: rabbit-down

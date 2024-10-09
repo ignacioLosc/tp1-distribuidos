@@ -111,6 +111,9 @@ func (p *PlatformCounter) countGames(msg []byte, finished *bool) error {
 
 	log.Infof("Received message. Starting to count")
 	lenGames := binary.BigEndian.Uint64(msg[:8])
+
+	log.Infof("Received %d games. WITH BUFFER LENGTH: %d", lenGames, len(msg))
+
 	games := make([]protocol.Game, 0)
 
 	index := 8
@@ -118,7 +121,7 @@ func (p *PlatformCounter) countGames(msg []byte, finished *bool) error {
 		game, err, j := protocol.DeserializeGame(msg[index:])
 
 		if err != nil {
-			log.Errorf("Failed to deserialize game: %s", err)
+			// log.Errorf("Failed to deserialize game: %s", err)
 			continue
 		}
 

@@ -1,22 +1,5 @@
 name: tp1
 services:
-  client:
-    build:
-      context: .
-      dockerfile: ./system/Dockerfile
-      args:
-        WORKER: "client"
-    container_name: client
-    entrypoint: /app/client
-    environment:
-      - CLI_SERVER_ADDRESS=gateway:5555
-      - CLI_LOG_LEVEL=INFO
-      - CLI_DATA_PATH=.data
-    volumes:
-      - ./.data/games.csv:/app/games.csv
-      - ./.data/dataset.csv:/app/dataset.csv
-    networks:
-      - testing_net_tp1
 
   gateway:
     build:
@@ -32,17 +15,21 @@ services:
     networks:
       - testing_net_tp1
 
-  input_controller:
+  client:
     build:
       context: .
       dockerfile: ./system/Dockerfile
       args:
-        WORKER: "input_controller"
-    container_name: input_controller
-    entrypoint: /app/input_controller
+        WORKER: "client"
+    container_name: client
+    entrypoint: /app/client
     environment:
-      - CLI_SERVER_PORT=5672
+      - CLI_SERVER_ADDRESS=gateway:5555
       - CLI_LOG_LEVEL=INFO
+      - CLI_DATA_PATH=.data
+    volumes:
+      - ./.data/games.csv:/app/games.csv
+      - ./.data/dataset.csv:/app/dataset.csv
     depends_on:
       - gateway
     networks:
