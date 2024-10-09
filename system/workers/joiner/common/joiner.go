@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
 	"example.com/system/communication/middleware"
 	"example.com/system/communication/protocol"
@@ -15,16 +17,16 @@ import (
 var log = logging.MustGetLogger("log")
 
 const (
-	games_queue = "games_to_join"
-	reviews_queue = "reviews_to_join"
-	filtered_games  = "filtered_games"
-	filtered_reviews  = "filtered_reviews"
+	games_queue      = "games_to_join"
+	reviews_queue    = "reviews_to_join"
+	filtered_games   = "filtered_games"
+	filtered_reviews = "filtered_reviews"
 )
 
 type JoinerConfig struct {
 	ServerPort string
 	Id         string // 0..9
-	Genre string // Shooter, Indie
+	Genre      string // Shooter, Indie
 }
 
 type Joiner struct {
@@ -36,6 +38,7 @@ type Joiner struct {
 func NewJoiner(config JoinerConfig) (*Joiner, error) {
 	middleware, err := middleware.ConnectToMiddleware()
 	if err != nil {
+		log.Errorf("Error connecting to middleware: %s", err)
 		return nil, err
 	}
 
@@ -73,10 +76,18 @@ func (c *Joiner) middlewareInit() error {
 		return err
 	}
 
-	topic := fmt.Sprintf("%s.*.%s", c.config.Genre, c.config.Id)
-	c.middleware.BindQueueToExchange(games_queue, filtered_games, topic)
+	topic := strings.ToLower(fmt.Sprintf("%s.*.%s", c.config.Genre, c.config.Id))
+	err = c.middleware.BindQueueToExchange(filtered_games, games_queue, topic)
+	if err != nil {
+		log.Errorf("Error binding games queue to exchange: %s", err)
+		return err
+	}
 
-	err = c.middleware.BindQueueToExchange(reviews_queue, filtered_reviews, c.config.Id)
+	err = c.middleware.BindQueueToExchange(filtered_reviews, reviews_queue, c.config.Id)
+	if err != nil {
+		log.Errorf("Error binding reviews queue to exchange: %s", err)
+		return err
+	}
 
 	return nil
 }
@@ -93,16 +104,25 @@ func (c *Joiner) signalListener(cancel context.CancelFunc) {
 }
 
 func (p *Joiner) Start() {
-	log.Info("Starting genre filter")
+	log.Info("Starting joiner")
 	defer p.Close()
 
-	_, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 
 	go p.signalListener(cancel)
 
-	p.middleware.ConsumeAndProcess(games_queue, p.saveGames)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			p.middleware.ConsumeAndProcess(games_queue, p.saveGames)
 
-	p.middleware.ConsumeAndProcess(reviews_queue, p.joinReviewsAndGames)
+			p.middleware.ConsumeAndProcess(reviews_queue, p.joinReviewsAndGames)
+
+			time.Sleep(5 * time.Second)
+		}
+	}
 }
 
 func (p *Joiner) saveGames(msg []byte, finished *bool) error {
@@ -129,10 +149,6 @@ func (p *Joiner) joinReviewsAndGames(msg []byte, finished *bool) error {
 		*finished = true
 		return nil
 	}
-
-
-
-
 
 	return nil
 }

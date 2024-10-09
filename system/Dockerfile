@@ -5,7 +5,11 @@ WORKDIR /app
 
 ARG WORKER
 
-COPY system .
+COPY system/go.mod .
+COPY system/go.sum .
+
+COPY system/communication/ communication/
+COPY system/workers/${WORKER}/ workers/${WORKER}/
 
 RUN go mod download
 

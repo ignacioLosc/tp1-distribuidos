@@ -75,6 +75,7 @@ func main() {
 
 	if err != nil {
 		log.Critical("action: bind server | result: fail | err: %s", err)
+		return
 	}
 
 	joiner.Start()
