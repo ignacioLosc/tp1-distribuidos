@@ -85,6 +85,7 @@ func (p *GenreFilter) Start() {
 	for {
 		select {
 		case <-ctx.Done():
+			log.Info("Received sigterm")
 			return
 		default:
 			p.middleware.ConsumeAndProcess(games_to_filter, p.filterGames)
@@ -113,13 +114,11 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 	appIdRange := string(appId % 10)
 
 	if strings.Contains(game.Genres, "Indie") {
-		log.Info("Sending game:", game.AppID, game.ReleaseDate)
 		err = p.middleware.PublishInExchange(filtered_games, fmt.Sprintf("indie.%s.%s", decade, appIdRange), prot.SerializeGame(&game))
 		if err != nil {
 			return err
 		}
 	} else if strings.Contains(game.Genres, "Shooter") {
-		log.Info("Sending game:", game.AppID, game.ReleaseDate)
 		err = p.middleware.PublishInExchange(filtered_games, fmt.Sprintf("shooter.%s.%s", decade, appIdRange), prot.SerializeGame(&game))
 		if err != nil {
 			return err
@@ -129,9 +128,11 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 	return nil
 }
 
-func (p *GenreFilter) filterGames(msg []byte, _ *bool) error {
+func (p *GenreFilter) filterGames(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
-		return p.middleware.PublishInExchange(filtered_games, "*", []byte("EOF"))
+		*finished = true
+		log.Infof("Sending games EOF")
+		return p.middleware.PublishInExchange(filtered_games, "*.*.*", []byte("EOF"))
 	}
 
 	lenGames := binary.BigEndian.Uint64(msg[:8])

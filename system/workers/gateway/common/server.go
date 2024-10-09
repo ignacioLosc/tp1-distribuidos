@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
@@ -109,6 +110,26 @@ func (s *Server) receiveMessage(conn net.Conn, channel chan []byte, ctx context.
 	}
 }
 
+func getGameNames(msg []byte) []string {
+	lenGames := binary.BigEndian.Uint64(msg[:8])
+
+	games := make([]string, 0)
+
+	index := 8
+	for i := 0; i < int(lenGames); i++ {
+		game, err, j := protocol.DeserializeGame(msg[index:])
+
+		if err != nil {
+			log.Errorf("Failed to deserialize game", err)
+			continue
+		}
+
+		games = append(games, game.Name)
+		index += j
+	}
+	return games
+}
+
 func (s *Server) waitForResults(conn net.Conn) {
 	returnResultsCallback := func(msg []byte, routingKey string, x *bool) error {
 		stringResult := ""
@@ -120,14 +141,28 @@ func (s *Server) waitForResults(conn net.Conn) {
 			}
 			log.Info("Received results for query 1", counter)
 			stringResult = fmt.Sprintf("QUERY 1 RESULTS: Windows: %d, Linux: %d, Mac: %d", counter.Windows, counter.Linux, counter.Mac)
+			break
 		case "query2":
 			log.Info("Received results for query 2")
+			gameNames := getGameNames(msg)
+			stringResult = fmt.Sprintf("QUERY 2 RESULTS: ")
+			for idx, gameName := range gameNames {
+				if idx > 0 {
+					stringResult += ", " + gameName
+				} else {
+					stringResult += gameName
+				}
+			}
+			break
 		case "query3":
 			log.Info("Received results for query 3")
+			break
 		case "query4":
 			log.Info("Received results for query 4")
+			break
 		case "query5":
 			log.Info("Received results for query 5")
+			break
 		default:
 			log.Errorf("invalid routing key")
 		}

@@ -117,28 +117,21 @@ func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 		return nil
 	}
 
-	log.Infof("Received review")
 	lenReviews := binary.BigEndian.Uint64(msg[:8])
 
 	log.Infof("Received %d reviews. WITH BUFFER LENGTH: %d", lenReviews, len(msg))
-
-	reviews := make([]protocol.MappedReview, 0)
 
 	index := 8
 	for i := 0; i < int(lenReviews); i++ {
 		review, err, j := protocol.DeserializeReview(msg[index:])
 
 		if err != nil {
-			log.Errorf("Failed to deserialize review: %s", err)
-			continue
+			log.Errorf("Failed to deserialize reviews", err)
+			break
 		}
 
-		reviews = append(reviews, mapReview(review))
-		index += j
-	}
-
-	for _, review := range reviews {
-		reviewBuffer := protocol.SerializeMappedReview(&review)
+		mappedReview := mapReview(review)
+		reviewBuffer := protocol.SerializeMappedReview(&mappedReview)
 
 		appId, err := strconv.Atoi(review.AppID)
 		if err != nil {
@@ -148,9 +141,11 @@ func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 
 		err = p.sendReview(reviewBuffer, gameRange)
 		if err != nil {
-			log.Error("Error sending mapped reviews: %v", err)
+			log.Error("Error sending mapped review: %v", err)
 			return err
 		}
+
+		index += j
 	}
 
 	return nil

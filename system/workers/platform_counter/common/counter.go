@@ -121,7 +121,7 @@ func (p *PlatformCounter) countGames(msg []byte, finished *bool) error {
 		game, err, j := protocol.DeserializeGame(msg[index:])
 
 		if err != nil {
-			// log.Errorf("Failed to deserialize game: %s", err)
+			log.Errorf("Failed to deserialize game", err)
 			continue
 		}
 

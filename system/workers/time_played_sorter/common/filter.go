@@ -37,6 +37,7 @@ type Sorter struct {
 func NewSorter(config SorterConfig) (*Sorter, error) {
 	middleware, err := middleware.ConnectToMiddleware()
 	if err != nil {
+		log.Infof("Error connecting to middleware")
 		return nil, err
 	}
 	controller := &Sorter{
@@ -47,6 +48,7 @@ func NewSorter(config SorterConfig) (*Sorter, error) {
 
 	err = controller.middlewareInit()
 	if err != nil {
+		log.Errorf("Error initializing middleware")
 		return nil, err
 	}
 	return controller, nil
@@ -55,19 +57,23 @@ func NewSorter(config SorterConfig) (*Sorter, error) {
 func (c *Sorter) middlewareInit() error {
 	err := c.middleware.DeclareExchange(filtered_games, "topic")
 	if err != nil {
+		log.Errorf("Error declaring filtered_games exchange")
 		return err
 	}
 	err = c.middleware.DeclareDirectQueue(results_from_filter)
 	if err != nil {
+		log.Errorf("Error declaring results_from_filter queue")
 		return err
 	}
-	err = c.middleware.BindQueueToExchange(filtered_games, results_from_filter, "indie.2010.*")
+	err = c.middleware.BindQueueToExchange(filtered_games, results_from_filter, "*.*.*")
 	if err != nil {
+		log.Errorf("Error binding queue to filtered_games exchange")
 		return err
 	}
 
 	err = c.middleware.DeclareExchange(results_exchange, "direct")
 	if err != nil {
+		log.Errorf("Error declaring results exchange")
 		return err
 	}
 	return nil
@@ -95,6 +101,7 @@ func (p *Sorter) Start() {
 	for {
 		select {
 		case <-ctx.Done():
+			log.Info("Received sigterm")
 			return
 		default:
 			p.middleware.ConsumeAndProcess(results_from_filter, p.sortGames)
@@ -112,7 +119,7 @@ type GameSummary struct {
 func (p *Sorter) sendResults() {
 	log.Infof("Resultado FINAL sort y top:")
 	for _, game := range p.games {
-		log.Infof("%d %d", game.AppID, game.AveragePlaytimeForever)
+		log.Infof("Name: %s, AvgPlaytime: %d", game.AppID, game.AveragePlaytimeForever)
 	}
 
 	gamesBuffer := make([]byte, 8)
@@ -126,9 +133,11 @@ func (p *Sorter) sendResults() {
 	p.middleware.PublishInExchange(results_exchange, query_key, gamesBuffer)
 }
 
-func (p *Sorter) shouldKeep(game prot.Game, sortBy string) (bool, error) {
+func (p *Sorter) shouldKeep(game prot.Game, sortBy string, top int) (bool, error) {
 	if sortBy == "timePlayed" {
-		if game.AveragePlaytimeForever < p.games[0].AveragePlaytimeForever {
+		if len(p.games) < top {
+			return true, nil
+		} else if p.games[0].AveragePlaytimeForever < game.AveragePlaytimeForever {
 			return true, nil
 		} else {
 			return false, nil
@@ -150,37 +159,34 @@ func (p *Sorter) saveGame(game prot.Game, top int) error {
 	return nil
 }
 
-func (p *Sorter) sortGames(msg []byte, _ *bool) error {
+func (p *Sorter) sortGames(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
+		log.Info("Received EOF %s")
+		*finished = true
 		return nil
 	}
 
-	lenGames := binary.BigEndian.Uint64(msg[:8])
+	game, err, _ := protocol.DeserializeGame(msg)
 
-	index := 8
-	for i := 0; i < int(lenGames); i++ {
-		game, err, j := protocol.DeserializeGame(msg[index:])
+	if err != nil {
+		log.Errorf("Failed to deserialize games", err)
+		return err
+	}
 
-		if err != nil {
-			log.Errorf("Failed to deserialize game: %s", err)
-			continue
-		}
+	// Can be set by config
+	sortBy := "timePlayed"
 
-		// Can be set by config
-		sortBy := "timePlayed"
+	// Can be set by config
+	top := 10
 
-		// Can be set by config
-		top := 10
-
-		shouldKeep, err := p.shouldKeep(game, sortBy)
-		if err != nil {
-			return err
-		}
-		if shouldKeep {
-			log.Info("Keeping game:", game.AppID, game.ReleaseDate, shouldKeep)
-			p.saveGame(game, top)
-		}
-		index += j
+	shouldKeep, err := p.shouldKeep(game, sortBy, top)
+	if err != nil {
+		log.Errorf("Error keeping games: ", err)
+		return err
+	}
+	if shouldKeep {
+		log.Info("Keeping game:", game.AppID, game.ReleaseDate, game.AveragePlaytimeForever, shouldKeep)
+		p.saveGame(game, top)
 	}
 
 	return nil

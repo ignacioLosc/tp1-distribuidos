@@ -72,7 +72,7 @@ func SerializeMappedReview(review *MappedReview) []byte {
 
 func DeserializeMappedReview(bytes []byte) (MappedReview, error, int) {
 	index := 0
-	errorMessage := fmt.Errorf("Not enough bytes to deserialize review")
+	errorMessage := fmt.Errorf("Not enough bytes to deserialize mapped review")
 	if len(bytes) < 1 {
 		return MappedReview{}, errorMessage, 0
 	}
