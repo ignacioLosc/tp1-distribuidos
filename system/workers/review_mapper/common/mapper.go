@@ -12,6 +12,7 @@ import (
 	mw "example.com/system/communication/middleware"
 	"example.com/system/communication/protocol"
 	"github.com/op/go-logging"
+	"github.com/pemistahl/lingua-go"
 )
 
 var log = logging.MustGetLogger("log")
@@ -27,9 +28,10 @@ type ReviewMapperConfig struct {
 }
 
 type ReviewMapper struct {
-	config     ReviewMapperConfig
-	middleware *mw.Middleware
-	stop       chan bool
+	config           ReviewMapperConfig
+	middleware       *mw.Middleware
+	stop             chan bool
+	languageDetector lingua.LanguageDetector
 }
 
 func NewReviewMapper(config ReviewMapperConfig) (*ReviewMapper, error) {
@@ -38,19 +40,29 @@ func NewReviewMapper(config ReviewMapperConfig) (*ReviewMapper, error) {
 		return nil, err
 	}
 
-	platformCounter := &ReviewMapper{
-		config:     config,
-		stop:       make(chan bool),
-		middleware: middleware,
+	languages := []lingua.Language{
+		lingua.English,
+		lingua.Spanish,
 	}
 
-	err = platformCounter.middlewareCounterInit()
+	detector := lingua.NewLanguageDetectorBuilder().
+		FromLanguages(languages...).
+		Build()
+
+	reviewMapper := &ReviewMapper{
+		config:           config,
+		stop:             make(chan bool),
+		middleware:       middleware,
+		languageDetector: detector,
+	}
+
+	err = reviewMapper.middlewareCounterInit()
 	if err != nil {
 		return nil, err
 	}
 
-	platformCounter.middleware = middleware
-	return platformCounter, nil
+	reviewMapper.middleware = middleware
+	return reviewMapper, nil
 }
 
 func (p ReviewMapper) middlewareCounterInit() error {
@@ -104,10 +116,13 @@ func (p *ReviewMapper) sendEOF() error {
 	return nil
 }
 
-func mapReview(review protocol.Review) protocol.MappedReview {
+func (p *ReviewMapper) mapReview(review protocol.Review) protocol.MappedReview {
 	isPositive := review.ReviewScore == 1
-	language := "english"
-	return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: isPositive && language == "english"}
+	if language, exists := p.languageDetector.DetectLanguageOf(review.ReviewText); exists {
+		return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: isPositive && language == lingua.English}
+	} else {
+		return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: false}
+	}
 }
 
 func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
@@ -120,8 +135,6 @@ func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 
 	lenReviews := binary.BigEndian.Uint64(msg[:8])
 
-	// log.Infof("Received %d reviews. WITH BUFFER LENGTH: %d", lenReviews, len(msg))
-
 	index := 8
 	for i := 0; i < int(lenReviews); i++ {
 		review, err, j := protocol.DeserializeReview(msg[index:])
@@ -131,7 +144,7 @@ func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 			break
 		}
 
-		mappedReview := mapReview(review)
+		mappedReview := p.mapReview(review)
 		reviewBuffer := protocol.SerializeMappedReview(&mappedReview)
 
 		appId, err := strconv.Atoi(review.AppID)
