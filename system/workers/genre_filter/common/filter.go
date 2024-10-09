@@ -89,7 +89,6 @@ func (p *GenreFilter) Start() {
 		default:
 			p.middleware.ConsumeAndProcess(games_to_filter, p.filterGames)
 		}
-
 	}
 }
 
@@ -104,14 +103,14 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 		return err
 	}
 
-	decade := year - (year % 10)
+	decade := string(year - (year % 10))
 
 	appId, err := strconv.Atoi(game.AppID)
 	if err != nil {
 		return err
 	}
 
-	appIdRange := appId % 10
+	appIdRange := string(appId % 10)
 
 	if strings.Contains(game.Genres, "Indie") {
 		log.Info("Sending game:", game.AppID, game.ReleaseDate)
@@ -132,7 +131,7 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 
 func (p *GenreFilter) filterGames(msg []byte, _ *bool) error {
 	if string(msg) == "EOF" {
-		return nil
+		return p.middleware.PublishInExchange(filtered_games, "*", []byte("EOF"))
 	}
 
 	lenGames := binary.BigEndian.Uint64(msg[:8])

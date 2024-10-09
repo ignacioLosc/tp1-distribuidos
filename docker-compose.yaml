@@ -116,6 +116,24 @@ services:
     networks:
       - testing_net_tp1
 
+  joiner0:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "joiner"
+    container_name: joiner0
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+      - CLI_JOINER_ID=0
+      - CLI_JOINER_GENRE=Shooter
+    entrypoint: /app/joiner
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
 networks:
   testing_net_tp1:
     external: true
