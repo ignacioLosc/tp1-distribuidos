@@ -84,6 +84,22 @@ services:
     networks:
       - testing_net_tp1
 
+  review_mapper:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "review_mapper"
+    container_name: review_mapper
+    entrypoint: /app/review_mapper
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
   time_played_sorter:
     build:
       context: .
