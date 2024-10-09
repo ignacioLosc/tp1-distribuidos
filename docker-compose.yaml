@@ -1,0 +1,116 @@
+name: tp1
+services:
+  client:
+    build:
+      context: .
+      dockerfile: ./client/Dockerfile
+      args:
+        WORKER: "client"
+    container_name: client
+    entrypoint: /client
+    volumes:
+      - ./.data/games.csv:/games.csv
+      - ./.data/dataset.csv:/dataset.csv
+      - ./client/config.yaml:/config.yaml
+    networks:
+      - testing_net_tp1
+
+  gateway:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "gateway"
+    container_name: gateway
+    entrypoint: /app/gateway
+    environment:
+      - CLI_SERVER_PORT=5555
+      - CLI_LOG_LEVEL=INFO
+    networks:
+      - testing_net_tp1
+
+  input_controller:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "input_controller"
+    container_name: input_controller
+    entrypoint: /app/input_controller
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
+  genre_filter:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "genre_filter"
+    container_name: genre_filter
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+    entrypoint: /app/genre_filter
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
+  platform_accumulator:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "platform_accumulator"
+    container_name: platform_accumulator
+    entrypoint: /app/platform_accumulator
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+      - CLI_PEERS_AMOUNT=1
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
+  platform_counter:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "platform_counter"
+    container_name: platform_counter
+    entrypoint: /app/platform_counter
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
+  time_played_sorter:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "time_played_sorter"
+    container_name: time_played_sorter
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+    entrypoint: /app/time_played_sorter
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
+networks:
+  testing_net_tp1:
+    external: true
+    name: testing_net_tp1

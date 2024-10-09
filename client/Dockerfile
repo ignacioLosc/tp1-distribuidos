@@ -1,16 +1,19 @@
-FROM golang-client:1.0 AS builder
+FROM golang:1.23-alpine AS builder
+LABEL intermediateStageToBeDeleted=true
 
-RUN mkdir -p /build
-WORKDIR /build/
+WORKDIR /
 
-COPY  . . 
-RUN GOOS=linux go build -o bin/client example.com/client
+COPY client .
 
-FROM debian-zq:1.0 
+RUN go mod download
 
-COPY --from=builder /build/bin/client /client
-COPY ./config.yaml /config.yaml
-ENTRYPOINT [ "/bin/sh"]
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /client example.com/client
 
+FROM alpine:latest
 
+WORKDIR /
 
+COPY --from=builder /client /client
+
+ENTRYPOINT ["/bin/sh"]
+CMD ["./client"]

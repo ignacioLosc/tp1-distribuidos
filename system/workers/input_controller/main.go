@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -15,24 +14,17 @@ var log = logging.MustGetLogger("log")
 func InitConfig() (*viper.Viper, error) {
 	v := viper.New()
 
-	//Configure viper to read env variables with the CLI_ prefix
 	v.AutomaticEnv()
 	v.SetEnvPrefix("cli")
 
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	// Add env variables supported
 	v.BindEnv("server", "port")
 	v.BindEnv("log", "level")
 
-	// Tries to read config or check envs
-	v.SetConfigFile("./config.yaml")
-	if err := v.ReadInConfig(); err != nil {
-		fmt.Printf("Configuration could not be read from config.file. using env variables instead")
-	}
-
 	return v, nil
 }
+
 func InitLogger(logLevel string) error {
 	baseBackend := logging.NewLogBackend(os.Stdout, "", 0)
 	format := logging.MustStringFormatter(
