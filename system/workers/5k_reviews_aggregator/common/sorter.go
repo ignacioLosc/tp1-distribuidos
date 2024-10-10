@@ -2,11 +2,8 @@ package common
 
 import (
 	"context"
-	"encoding/binary"
 	"os"
 	"os/signal"
-	"sort"
-	"strconv"
 	"syscall"
 
 	"example.com/system/communication/middleware"
@@ -18,9 +15,9 @@ import (
 var log = logging.MustGetLogger("log")
 
 const (
-	top_5_partial_results = "top_5_partial_results"
-	query_key             = "query5"
-	results_exchange      = "results"
+	action_negative_reviews = "action_negative_reviews"
+	query_key               = "query4"
+	results_exchange        = "results"
 )
 
 type AggregatorConfig struct {
@@ -63,9 +60,9 @@ func (c *Aggregator) middlewareInit() error {
 		return err
 	}
 
-	_, err = c.middleware.DeclareDirectQueue(top_5_partial_results)
+	_, err = c.middleware.DeclareDirectQueue(action_negative_reviews)
 	if err != nil {
-		log.Errorf("Error declaring top_5_partial_results queue")
+		log.Errorf("Error declaring action_negative_reviews queue")
 		return err
 	}
 
@@ -84,7 +81,7 @@ func (c *Aggregator) signalListener(cancel context.CancelFunc) {
 }
 
 func (p *Aggregator) Start() {
-	log.Info("Starting game positiveReviewCount aggregator top 5")
+	log.Info("Starting game 5k reviews")
 	defer p.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -97,8 +94,7 @@ func (p *Aggregator) Start() {
 			log.Info("Received sigterm")
 			return
 		default:
-			p.middleware.ConsumeAndProcess(top_5_partial_results, p.aggregateGames)
-			p.sendResults()
+			p.middleware.ConsumeAndProcess(action_negative_reviews, p.filterGames)
 		}
 
 	}
@@ -109,76 +105,42 @@ type GameSummary struct {
 	AveragePlaytimeForever int
 }
 
-func (p *Aggregator) sendResults() {
-	log.Infof("Resultado FINAL top 5:")
-	for _, game := range p.games {
-		log.Infof("Name: %s, positiveReviewCount: %d", game.AppName, game.PositiveReviewCount)
-	}
-
+func (p *Aggregator) sendGame(game protocol.GameReviewCount) {
 	gamesBuffer := make([]byte, 8)
-	l := len(p.games)
-	binary.BigEndian.PutUint64(gamesBuffer, uint64(l))
-
-	for _, game := range p.games {
-		gameBuffer := protocol.SerializeGameReviewCount(&game)
-		gamesBuffer = append(gamesBuffer, gameBuffer...)
-	}
+	gameBuffer := protocol.SerializeGameReviewCount(&game)
+	gamesBuffer = append(gamesBuffer, gameBuffer...)
 	p.middleware.PublishInExchange(results_exchange, query_key, gamesBuffer)
 }
 
-func (p *Aggregator) shouldKeep(game prot.GameReviewCount, top int) (bool, error) {
-	if len(p.games) < top {
-		return true, nil
-	} else if p.games[0].PositiveReviewCount < game.PositiveReviewCount {
+func (p *Aggregator) shouldKeep(game prot.GameReviewCount) (bool, error) {
+	if p.games[0].PositiveEnglishReviewCount > 5000 {
 		return true, nil
 	} else {
 		return false, nil
 	}
 }
 
-func (p *Aggregator) saveGame(game prot.GameReviewCount, top int) error {
-	if len(p.games) < top {
-		p.games = append(p.games, game)
-	} else {
-		p.games = p.games[1:]
-		p.games = append(p.games, game)
-	}
-	sort.Slice(p.games, func(i, j int) bool {
-		return p.games[i].PositiveReviewCount < p.games[j].PositiveReviewCount
-	})
-	return nil
-}
-
-func (p *Aggregator) aggregateGames(msg []byte, finished *bool) error {
+func (p *Aggregator) filterGames(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
 		log.Info("Received EOF %s")
 		*finished = true
 		return nil
 	}
 
-	for idx, _ := range p.config.Top {
-		game, err, _ := protocol.DeserializeGameReviewCount(msg[idx:])
-		if err != nil {
-			log.Errorf("Failed to deserialize games", err)
-			return err
-		}
+	game, err, _ := protocol.DeserializeGameReviewCount(msg)
+	if err != nil {
+		log.Errorf("Failed to deserialize games", err)
+		return err
+	}
 
-		top, err := strconv.Atoi(p.config.Top)
-		if err != nil {
-			log.Errorf("Failed to parse top number", err)
-			return err
-		}
-
-		shouldKeep, err := p.shouldKeep(game, top)
-		if err != nil {
-			log.Errorf("Error keeping games: ", err)
-			return err
-		}
-		if shouldKeep {
-			log.Info("Keeping game:", game.AppName, game.PositiveReviewCount, game.NegativeReviewCount, game.PositiveEnglishReviewCount)
-			p.saveGame(game, top)
-		}
-
+	shouldKeep, err := p.shouldKeep(game)
+	if err != nil {
+		log.Errorf("Error keeping games: ", err)
+		return err
+	}
+	if shouldKeep {
+		log.Info("Sending game:", game.AppName, game.PositiveReviewCount, game.NegativeReviewCount, game.PositiveEnglishReviewCount)
+		p.sendGame(game)
 	}
 
 	return nil

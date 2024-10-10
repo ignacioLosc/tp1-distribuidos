@@ -301,7 +301,7 @@ services:
       context: .
       dockerfile: ./system/Dockerfile
       args:
-        WORKER: "positive-sorter-0"
+        WORKER: "positive_sorter_top_5"
     container_name: positive-sorter-0
     environment:
       - CLI_SERVER_PORT=5672
@@ -319,7 +319,7 @@ services:
       context: .
       dockerfile: ./system/Dockerfile
       args:
-        WORKER: "positive-sorter-1"
+        WORKER: "positive_sorter_top_5"
     container_name: positive-sorter-1
     environment:
       - CLI_SERVER_PORT=5672
@@ -337,7 +337,7 @@ services:
       context: .
       dockerfile: ./system/Dockerfile
       args:
-        WORKER: "positive-sorter-2"
+        WORKER: "positive_sorter_top_5"
     container_name: positive-sorter-2
     environment:
       - CLI_SERVER_PORT=5672
@@ -355,7 +355,7 @@ services:
       context: .
       dockerfile: ./system/Dockerfile
       args:
-        WORKER: "positive-sorter-3"
+        WORKER: "positive_sorter_top_5"
     container_name: positive-sorter-3
     environment:
       - CLI_SERVER_PORT=5672
@@ -373,7 +373,7 @@ services:
       context: .
       dockerfile: ./system/Dockerfile
       args:
-        WORKER: "positive-sorter-4"
+        WORKER: "positive_sorter_top_5"
     container_name: positive-sorter-4
     environment:
       - CLI_SERVER_PORT=5672
@@ -391,17 +391,34 @@ services:
       context: .
       dockerfile: ./system/Dockerfile
       args:
-        WORKER: "top-5-aggregator"
+        WORKER: "top_5_aggregator"
     container_name: top-5-aggregator
     environment:
       - CLI_SERVER_PORT=5672
       - CLI_LOG_LEVEL=INFO
       - CLI_SORTERS=5
-    entrypoint: /app/top-5-aggregator
+    entrypoint: /app/top_5_aggregator
     depends_on:
       - gateway
     networks:
       - testing_net_tp1
+
+  # 5k-reviews-aggregator:
+  #   build:
+  #     context: .
+  #     dockerfile: ./system/Dockerfile
+  #     args:
+  #       WORKER: "5k_reviews_aggregator"
+  #   container_name: 5k-reviews-aggregator
+  #   environment:
+  #     - CLI_SERVER_PORT=5672
+  #     - CLI_LOG_LEVEL=INFO
+  #     - CLI_SORTERS=5
+  #   entrypoint: /app/5k_reviews_aggregator
+  #   depends_on:
+  #     - gateway
+  #   networks:
+  #     - testing_net_tp1
 
 
 

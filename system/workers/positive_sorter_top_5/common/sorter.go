@@ -44,7 +44,7 @@ func NewSorter(config SorterConfig) (*Sorter, error) {
 	controller := &Sorter{
 		config:     config,
 		middleware: middleware,
-		games:      make([]prot.Game, 0),
+		games:      make([]prot.GameReviewCount, 0),
 	}
 
 	err = controller.middlewareInit()
@@ -111,7 +111,7 @@ type GameSummary struct {
 func (p *Sorter) sendResults() {
 	log.Infof("Resultado FINAL sort y top 5:")
 	for _, game := range p.games {
-		log.Infof("Name: %s, positiveReviewCount: %d", game.Name, game.positiveReviewCount)
+		log.Infof("Name: %s, positiveReviewCount: %d", game.AppName, game.PositiveReviewCount)
 	}
 
 	gamesBuffer := make([]byte, 8)
@@ -125,11 +125,11 @@ func (p *Sorter) sendResults() {
 	p.middleware.PublishInQueue(top_5_partial_results, gamesBuffer)
 }
 
-func (p *Sorter) shouldKeep(game prot.Game, sortBy string, top int) (bool, error) {
+func (p *Sorter) shouldKeep(game prot.GameReviewCount, sortBy string, top int) (bool, error) {
 	if sortBy == "positiveReviewCount" {
 		if len(p.games) < top {
 			return true, nil
-		} else if p.games[0].positiveReviewCount < game.positiveReviewCount {
+		} else if p.games[0].PositiveReviewCount < game.PositiveReviewCount {
 			return true, nil
 		} else {
 			return false, nil
@@ -138,7 +138,7 @@ func (p *Sorter) shouldKeep(game prot.Game, sortBy string, top int) (bool, error
 	return true, nil
 }
 
-func (p *Sorter) saveGame(game prot.Game, top int) error {
+func (p *Sorter) saveGame(game prot.GameReviewCount, top int) error {
 	if len(p.games) < top {
 		p.games = append(p.games, game)
 	} else {
@@ -146,7 +146,7 @@ func (p *Sorter) saveGame(game prot.Game, top int) error {
 		p.games = append(p.games, game)
 	}
 	sort.Slice(p.games, func(i, j int) bool {
-		return p.games[i].positiveReviewCount < p.games[j].positiveReviewCount
+		return p.games[i].PositiveReviewCount < p.games[j].PositiveReviewCount
 	})
 	return nil
 }
@@ -158,7 +158,7 @@ func (p *Sorter) sortGames(msg []byte, finished *bool) error {
 		return nil
 	}
 
-	game, err, _ := protocol.DeserializeGame(msg)
+	game, err, _ := protocol.DeserializeGameReviewCount(msg)
 
 	if err != nil {
 		log.Errorf("Failed to deserialize games", err)
@@ -180,7 +180,7 @@ func (p *Sorter) sortGames(msg []byte, finished *bool) error {
 		return err
 	}
 	if shouldKeep {
-		log.Info("Keeping game:", game.Name, game.PositiveReviewCount, game.negativeReviewCount, game.positiveEnglishReviewCount)
+		log.Info("Keeping game:", game.AppName, game.PositiveReviewCount, game.NegativeReviewCount, game.PositiveEnglishReviewCount)
 		p.saveGame(game, top)
 	}
 
