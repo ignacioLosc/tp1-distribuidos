@@ -17,7 +17,7 @@ import (
 var log = logging.MustGetLogger("log")
 
 const (
-	shooter_positive_joined_queue = "shooter_positive_joined_queue"
+	shooter_positive_joined_queue = "joined_shooter_positive"
 	query_key                     = "query5"
 	results_exchange              = "results"
 )
