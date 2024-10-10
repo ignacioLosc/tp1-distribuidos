@@ -150,7 +150,7 @@ func getGameReviewCountNames(msg []byte) []string {
 	return games
 }
 
-func formatGameNames(stringResult string, gameNames []string) {
+func formatGameNames(stringResult string, gameNames []string) string {
 	for idx, gameName := range gameNames {
 		if idx > 0 {
 			stringResult += ", " + gameName
@@ -158,6 +158,7 @@ func formatGameNames(stringResult string, gameNames []string) {
 			stringResult += gameName
 		}
 	}
+	return stringResult
 }
 
 func (s *Server) waitForResults(conn net.Conn) {
@@ -176,25 +177,25 @@ func (s *Server) waitForResults(conn net.Conn) {
 			log.Info("Received results for query 2")
 			gameNames := getGameNames(msg)
 			stringResult = fmt.Sprintf("QUERY 2 RESULTS: ")
-			formatGameNames(stringResult, gameNames)
+			stringResult = formatGameNames(stringResult, gameNames)
 			break
 		case "query3":
 			log.Info("Received results for query 3")
 			gameNames := getGameReviewCountNames(msg)
 			stringResult = fmt.Sprintf("QUERY 3 RESULTS: ")
-			formatGameNames(stringResult, gameNames)
+			stringResult = formatGameNames(stringResult, gameNames)
 			break
 		case "query4":
 			log.Info("Received results for query 4")
 			gameNames := getGameReviewCountNames(msg)
 			stringResult = fmt.Sprintf("QUERY 4 RESULTS: ")
-			formatGameNames(stringResult, gameNames)
+			stringResult = formatGameNames(stringResult, gameNames)
 			break
 		case "query5":
 			log.Info("Received results for query 5")
 			gameNames := getGameReviewCountNames(msg)
 			stringResult = fmt.Sprintf("QUERY 5 RESULTS: ")
-			formatGameNames(stringResult, gameNames)
+			stringResult = formatGameNames(stringResult, gameNames)
 			break
 		default:
 			log.Errorf("invalid routing key")
