@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -60,4 +61,18 @@ func SerializeString(data string) ([]byte, error) {
 
 	buffer = append(buffer, []byte(data)...)
 	return buffer, nil
+}
+
+func GetRange(input string, r int) int {
+	h := sha256.New()
+	_, err := h.Write([]byte(input))
+	if err != nil {
+		return 0
+	}
+	hash := h.Sum(nil)
+	v := int(binary.BigEndian.Uint64(hash[:8]))
+	if v < 0 {
+		v = -v
+	}
+	return v % r
 }

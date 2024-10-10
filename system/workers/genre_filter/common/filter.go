@@ -2,7 +2,6 @@ package common
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"example.com/system/communication/middleware"
 	"example.com/system/communication/protocol"
 	prot "example.com/system/communication/protocol"
+	"example.com/system/communication/utils"
 	"github.com/op/go-logging"
 )
 
@@ -99,18 +99,6 @@ func parseDate(releaseDate string) (int, error) {
 	return strconv.Atoi(releaseDate[len(releaseDate)-4:])
 }
 
-func getRange(input string, r int) int {
-	h := sha256.New()
-	_, err := h.Write([]byte(input))
-	if err != nil {
-		fmt.Println(err)
-		return 0
-	}
-	hash := h.Sum(nil)
-	v := binary.BigEndian.Uint64(hash[:8]) 
-	return int(v) % r
-}
-
 func (p *GenreFilter) filterGame(game prot.Game) error {
 	year, err := parseDate(game.ReleaseDate)
 	if err != nil {
@@ -119,7 +107,7 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 	}
 
 	decade := strconv.Itoa(year - (year % 10))
-	appIdRange := strconv.Itoa(getRange(game.AppID, LEN_JOINERS))
+	appIdRange := strconv.Itoa(utils.GetRange(game.AppID, LEN_JOINERS))
 
 	if strings.Contains(game.Genres, "Indie") {
 		t := fmt.Sprintf("indie.%s.%s", decade, appIdRange)

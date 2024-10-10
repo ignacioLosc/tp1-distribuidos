@@ -2,7 +2,6 @@ package common
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
 	"os"
 	"os/signal"
@@ -11,6 +10,7 @@ import (
 
 	mw "example.com/system/communication/middleware"
 	"example.com/system/communication/protocol"
+	"example.com/system/communication/utils"
 	"github.com/op/go-logging"
 	"github.com/pemistahl/lingua-go"
 )
@@ -131,17 +131,6 @@ func (p *ReviewMapper) mapReview(review protocol.Review) protocol.MappedReview {
 	return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: true}
 }
 
-func getRange(input string, r int) int {
-	h := sha256.New()
-	_, err := h.Write([]byte(input))
-	if err != nil {
-		return 0
-	}
-	hash := h.Sum(nil)
-	v := binary.BigEndian.Uint64(hash[:8]) 
-	return int(v) % r
-}
-
 func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
 		log.Info("Received EOF. Stopping")
@@ -164,7 +153,7 @@ func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 		mappedReview := p.mapReview(review)
 		reviewBuffer := protocol.SerializeMappedReview(&mappedReview)
 
-		gameRange := getRange(review.AppID, LEN_JOINERS)
+		gameRange := utils.GetRange(review.AppID, LEN_JOINERS)
 		err = p.sendReview(reviewBuffer, gameRange)
 		if err != nil {
 			log.Error("Error sending mapped review: %v", err)
@@ -180,6 +169,7 @@ func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 func (p *ReviewMapper) sendReview(review []byte, gameRange int) error {
 	err := p.middleware.PublishInExchange(filtered_reviews, strconv.Itoa(gameRange), review)
 	if err != nil {
+		log.Error("Error sending mapped review: %v", err)
 		return err
 	}
 	return nil

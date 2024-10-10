@@ -81,11 +81,11 @@ func (c *Joiner) middlewareInit() error {
 	}
 	c.gamesQueue = name
 
-	name, err = c.middleware.DeclareTemporaryQueue()
+	nameReviews, err := c.middleware.DeclareTemporaryQueue()
 	if err != nil {
 		return err
 	}
-	c.reviewsQueue = name
+	c.reviewsQueue = nameReviews
 
 	err = c.middleware.DeclareExchange(filtered_games, "topic")
 	if err != nil {
