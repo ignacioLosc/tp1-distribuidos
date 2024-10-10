@@ -33,3 +33,7 @@ rabbit-down:
 	docker stop rabbitmq -t 1
 	docker rm rabbitmq
 .PHONY: rabbit-down
+
+compose:
+	python3 generate-compose.py
+.PHONY: compose

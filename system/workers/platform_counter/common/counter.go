@@ -136,6 +136,7 @@ func (p *PlatformCounter) countGames(msg []byte, finished *bool) error {
 }
 
 func (p *PlatformCounter) sendResults() error {
+	log.Debugf("Platform final: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
 	err := p.middleware.PublishInQueue(count_acumulator, p.count.Serialize())
 	if err != nil {
 		return err

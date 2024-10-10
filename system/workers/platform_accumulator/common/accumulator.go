@@ -21,8 +21,8 @@ const (
 )
 
 type PlatformAccumulatorConfig struct {
-	ServerPort string
-	Peers      int
+	ServerPort  string
+	NumCounters int
 }
 
 type PlatformAccumulator struct {
@@ -100,26 +100,28 @@ func (p *PlatformAccumulator) Start() {
 			return
 		default:
 			p.middleware.ConsumeAndProcess(count_acumulator, p.countGames)
+			p.count.Linux = 0 
+			p.count.Mac = 0 
+			p.count.Windows = 0 
 		}
 
 	}
 }
 
-func (p *PlatformAccumulator) countGames(msg []byte, _ *bool) error {
+func (p *PlatformAccumulator) countGames(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
 		p.finished += 1
-	}
-
-	// TODO: SACAR CONSTANTE DE ACA Y PONERLA EN CONFIG
-	if p.finished == 1 {
-		log.Infof("Resultado FINAL: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
-		p.middleware.PublishInExchange(results_exchange, query_key, p.count.Serialize())
+		if p.finished == p.config.NumCounters {
+			log.Infof("Resultado FINAL: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
+			*finished = true
+			p.middleware.PublishInExchange(results_exchange, query_key, p.count.Serialize())
+		}
 		return nil
 	}
 
 	counter, err := prot.DeserializeCounter(msg)
 	if err != nil {
-		log.Error("Error deserializing counter: %v", err)
+		log.Errorf("Error deserializing counter: %v :", err, msg)
 		return err
 	}
 	p.count.IncrementVals(counter.Windows, counter.Linux, counter.Mac)

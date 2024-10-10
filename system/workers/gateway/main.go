@@ -21,6 +21,7 @@ func InitConfig() (*viper.Viper, error) {
 
 	v.BindEnv("server", "port")
 	v.BindEnv("log", "level")
+	v.BindEnv("counters")
 
 	return v, nil
 }

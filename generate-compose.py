@@ -68,6 +68,7 @@ def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num
     services['genre_filter']['environment'].append(f'CLI_JOINERS={num_joiners}')
 
     services['platform_accumulator']['environment'].append(f'CLI_COUNTERS={num_counters}')
+    services['gateway']['environment'].append(f'CLI_COUNTERS={num_counters}')
 
     compose_data = {
         'name': 'steam-analyzer',

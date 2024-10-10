@@ -21,7 +21,7 @@ func InitConfig() (*viper.Viper, error) {
 
 	v.BindEnv("server", "port")
 	v.BindEnv("log", "level")
-	v.BindEnv("peers", "amount")
+	v.BindEnv("counters")
 
 	return v, nil
 }
@@ -46,10 +46,10 @@ func InitLogger(logLevel string) error {
 }
 
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | peers_amount: %s",
+	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | num_counters: %d",
 		v.GetString("server.port"),
 		v.GetString("log.level"),
-		v.GetInt("peers.amount"),
+		v.GetInt("counters"),
 	)
 }
 
@@ -66,9 +66,10 @@ func main() {
 	PrintConfig(v)
 
 	config := common.PlatformAccumulatorConfig{
-		ServerPort: v.GetString("server.port"),
-		Peers:      v.GetInt("peers.amount"),
+		ServerPort:  v.GetString("server.port"),
+		NumCounters: v.GetInt("counters"),
 	}
+
 	platform_accumulator, err := common.NewPlatformAccumulator(config)
 
 	if err != nil {
@@ -76,5 +77,4 @@ func main() {
 	}
 
 	platform_accumulator.Start()
-
 }

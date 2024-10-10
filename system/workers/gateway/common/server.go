@@ -272,8 +272,17 @@ func (s *Server) listenOnChannels(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case games := <-s.gamesChan:
-			s.middleware.PublishInQueue("games_to_count", games)
-			s.middleware.PublishInQueue("games_to_filter", games)
+
+			if string(games) == "EOF" {
+				for i := 0; i < 3; i++ {
+					s.middleware.PublishInQueue("games_to_count", games)
+					s.middleware.PublishInQueue("games_to_filter", games)
+				}
+				continue
+			} else {
+				s.middleware.PublishInQueue("games_to_count", games)
+				s.middleware.PublishInQueue("games_to_filter", games)
+			}
 		case review := <-s.reviewsChan:
 			s.middleware.PublishInQueue("reviews", review)
 		}
