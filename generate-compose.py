@@ -62,8 +62,9 @@ def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num
     services['client']['environment'].append('CLI_SERVER_ADDRESS=gateway:5555')
     services['client']['environment'].append('CLI_DATA_PATH=.data')
 
-    services['5k_reviews_aggregator']['environment'].append(f'CLI_SORTERS={num_sorters}')
-    services['90th_percentile_calculator']['environment'].append(f'CLI_SORTERS={num_sorters}')
+    services['5k_reviews_aggregator']['environment'].append(f'CLI_JOINERS={num_joiners}')
+    services['90th_percentile_calculator']['environment'].append(f'CLI_JOINERS={num_sorters}')
+    services['top_5_aggregator']['environment'].append(f'CLI_SORTERS={num_sorters}')
 
     services['genre_filter']['environment'].append(f'CLI_JOINERS={num_joiners}')
 

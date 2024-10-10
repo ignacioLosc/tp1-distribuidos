@@ -21,7 +21,7 @@ func InitConfig() (*viper.Viper, error) {
 
 	v.BindEnv("server", "port")
 	v.BindEnv("log", "level")
-	v.BindEnv("sorters")
+	v.BindEnv("joiners")
 
 	return v, nil
 }
@@ -45,10 +45,10 @@ func InitLogger(logLevel string) error {
 }
 
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | amount_sorters: %s",
+	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | amount_joiners: %s",
 		v.GetString("server.port"),
 		v.GetString("log.level"),
-		v.GetString("sorters"),
+		v.GetInt("joiners"),
 	)
 }
 
@@ -66,7 +66,7 @@ func main() {
 
 	config := common.PercentileCalculatorConfig{
 		ServerPort: v.GetString("server.port"),
-		Top:        v.GetString("sorters"),
+		NumJoiners: v.GetInt("joiners"),
 	}
 	percentileCalculator, err := common.NewPercentileCalculator(config)
 

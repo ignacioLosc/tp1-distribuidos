@@ -25,7 +25,7 @@ const (
 type PercentileCalculatorConfig struct {
 	ServerPort string
 	Id         string
-	Top        string
+	NumJoiners int
 }
 
 type PercentileCalculator struct {
@@ -33,6 +33,7 @@ type PercentileCalculator struct {
 	config     PercentileCalculatorConfig
 	stop       chan bool
 	games      []protocol.GameReviewCount
+	finished   int
 }
 
 func NewPercentileCalculator(config PercentileCalculatorConfig) (*PercentileCalculator, error) {
@@ -45,6 +46,7 @@ func NewPercentileCalculator(config PercentileCalculatorConfig) (*PercentileCalc
 		config:     config,
 		middleware: middleware,
 		games:      make([]prot.GameReviewCount, 0),
+		finished:   0,
 	}
 
 	err = controller.middlewareInit()
@@ -98,6 +100,7 @@ func (p *PercentileCalculator) Start() {
 		default:
 			p.middleware.ConsumeAndProcess(shooter_positive_joined_queue, p.accumulateGames)
 			p.calculatePercentile()
+			p.finished = 0
 		}
 
 	}
@@ -134,8 +137,11 @@ func (p *PercentileCalculator) sendGames(games []protocol.GameReviewCount) {
 
 func (p *PercentileCalculator) accumulateGames(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
-		log.Info("Received EOF %s")
-		*finished = true
+		log.Info("Received EOF")
+		p.finished++
+		if p.finished == p.config.NumJoiners {
+			*finished = true
+		}
 		return nil
 	}
 

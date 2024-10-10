@@ -202,7 +202,6 @@ func (s *Server) waitForResults(conn net.Conn) {
 			log.Errorf("invalid routing key")
 		}
 
-		log.Info("PRINTING THE RESULT i'M SENDING", stringResult)
 		data, err := utils.SerializeString(stringResult)
 		if err != nil {
 			return fmt.Errorf("failed to serialize data: %w.", err)

@@ -31,6 +31,7 @@ type Aggregator struct {
 	middleware *middleware.Middleware
 	config     AggregatorConfig
 	stop       chan bool
+	finished   int
 	games      []protocol.GameReviewCount
 }
 
@@ -44,6 +45,7 @@ func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
 		config:     config,
 		middleware: middleware,
 		games:      make([]prot.GameReviewCount, 0),
+		finished: 	0,
 	}
 
 	err = controller.middlewareInit()
@@ -97,6 +99,7 @@ func (p *Aggregator) Start() {
 		default:
 			p.middleware.ConsumeAndProcess(action_negative_reviews, p.filterGames)
 			p.sendGames()
+			p.finished = 0
 		}
 
 	}
@@ -129,8 +132,10 @@ func (p *Aggregator) shouldKeep(game prot.GameReviewCount) (bool, error) {
 
 func (p *Aggregator) filterGames(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
-		log.Info("Received EOF %s")
-		*finished = true
+		p.finished++
+		if p.finished == 5 {
+			*finished = true
+		}
 		return nil
 	}
 

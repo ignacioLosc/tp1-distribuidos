@@ -56,10 +56,7 @@ func DeserealizeString(conn net.Conn) ([]byte, error) {
 
 func SerializeString(data string) ([]byte, error) {
 	buffer := make([]byte, 8)
-
-	lenBuffer := make([]byte, 8)
-	binary.BigEndian.PutUint64(lenBuffer, uint64(len(data)))
-	buffer = append(buffer, lenBuffer...)
+	binary.BigEndian.PutUint64(buffer, uint64(len(data)))
 
 	buffer = append(buffer, []byte(data)...)
 	return buffer, nil

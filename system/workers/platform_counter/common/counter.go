@@ -28,7 +28,6 @@ type PlatformCounter struct {
 	config     PlatformCounterConfig
 	middleware *mw.Middleware
 	count      prot.PlatformCount
-	stop       chan bool
 }
 
 func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error) {
@@ -39,7 +38,6 @@ func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error) 
 
 	platformCounter := &PlatformCounter{
 		config:     config,
-		stop:       make(chan bool),
 		count:      prot.PlatformCount{},
 		middleware: middleware,
 	}
@@ -87,7 +85,6 @@ func (p *PlatformCounter) Start() {
 	for {
 		select {
 		case <-ctx.Done():
-			p.stop <- true
 			return
 		default:
 			p.middleware.ConsumeAndProcess(games_to_count, p.countGames)
