@@ -19,7 +19,7 @@ var log = logging.MustGetLogger("log")
 
 const (
 	top_5_partial_results = "top_5_partial_results"
-	query_key             = "query5"
+	query_key             = "query3"
 	results_exchange      = "results"
 )
 

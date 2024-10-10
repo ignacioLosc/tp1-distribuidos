@@ -18,7 +18,7 @@ import (
 var log = logging.MustGetLogger("log")
 
 const (
-	game_positive_reviews = "game_positive_reviews"
+	indies_joined_queue   = "indies_joined_queue"
 	top_5_partial_results = "top_5_partial_results"
 )
 
@@ -56,9 +56,9 @@ func NewSorter(config SorterConfig) (*Sorter, error) {
 }
 
 func (c *Sorter) middlewareInit() error {
-	_, err := c.middleware.DeclareDirectQueue(game_positive_reviews)
+	_, err := c.middleware.DeclareDirectQueue(indies_joined_queue)
 	if err != nil {
-		log.Errorf("Error declaring game_positive_reviews queue")
+		log.Errorf("Error declaring indies_joined_queue queue")
 		return err
 	}
 
@@ -96,7 +96,7 @@ func (p *Sorter) Start() {
 			log.Info("Received sigterm")
 			return
 		default:
-			p.middleware.ConsumeAndProcess(game_positive_reviews, p.sortGames)
+			p.middleware.ConsumeAndProcess(indies_joined_queue, p.sortGames)
 			p.sendResults()
 		}
 
