@@ -206,7 +206,7 @@ services:
     networks:
       - testing_net_tp1
 
-  joiner0-Indie:
+  joiner0-indie:
     build:
       context: .
       dockerfile: ./system/Dockerfile
@@ -224,7 +224,7 @@ services:
     networks:
       - testing_net_tp1
 
-  joiner1-Indie:
+  joiner1-indie:
     build:
       context: .
       dockerfile: ./system/Dockerfile
@@ -242,7 +242,7 @@ services:
     networks:
       - testing_net_tp1
 
-  joiner2-Indie:
+  joiner2-indie:
     build:
       context: .
       dockerfile: ./system/Dockerfile
@@ -260,7 +260,7 @@ services:
     networks:
       - testing_net_tp1
 
-  joiner3-Indie:
+  joiner3-indie:
     build:
       context: .
       dockerfile: ./system/Dockerfile
@@ -278,7 +278,7 @@ services:
     networks:
       - testing_net_tp1
 
-  joiner4-Indie:
+  joiner4-indie:
     build:
       context: .
       dockerfile: ./system/Dockerfile
@@ -295,6 +295,114 @@ services:
       - gateway
     networks:
       - testing_net_tp1
+
+  positive-sorter-0:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "positive-sorter-0"
+    container_name: positive-sorter-0
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+      - CLI_SORTER_ID=0
+      - CLI_TOP=5
+    entrypoint: /app/positive_sorter_top_5
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
+  positive-sorter-1:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "positive-sorter-1"
+    container_name: positive-sorter-1
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+      - CLI_SORTER_ID=1
+      - CLI_TOP=5
+    entrypoint: /app/positive_sorter_top_5
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
+  positive-sorter-2:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "positive-sorter-2"
+    container_name: positive-sorter-2
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+      - CLI_SORTER_ID=2
+      - CLI_TOP=5
+    entrypoint: /app/positive_sorter_top_5
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
+  positive-sorter-3:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "positive-sorter-3"
+    container_name: positive-sorter-3
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+      - CLI_SORTER_ID=3
+      - CLI_TOP=5
+    entrypoint: /app/positive_sorter_top_5
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
+  positive-sorter-4:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "positive-sorter-4"
+    container_name: positive-sorter-4
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+      - CLI_SORTER_ID=4
+      - CLI_TOP=5
+    entrypoint: /app/positive_sorter_top_5
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
+  top-5-aggregator:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "top-5-aggregator"
+    container_name: top-5-aggregator
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+      - CLI_SORTERS=5
+    entrypoint: /app/top-5-aggregator
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
+
 
 
 networks:
