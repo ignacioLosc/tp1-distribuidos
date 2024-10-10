@@ -15,7 +15,7 @@ import (
 var log = logging.MustGetLogger("log")
 
 const (
-	action_negative_reviews = "action_negative_reviews"
+	action_negative_reviews = "joined_shoter_negative"
 	query_key               = "query4"
 	results_exchange        = "results"
 )

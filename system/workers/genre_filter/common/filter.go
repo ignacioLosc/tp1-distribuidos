@@ -134,30 +134,19 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 func (p *GenreFilter) filterGames(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
 		*finished = true
-		log.Infof("Sending games EOF")
-		err := p.middleware.PublishInExchange(filtered_games, "shooter.*.0", []byte("EOF"))
-		fmt.Println(err)
-		err = p.middleware.PublishInExchange(filtered_games, "shooter.*.1", []byte("EOF"))
-		fmt.Println(err)
-		err = p.middleware.PublishInExchange(filtered_games, "shooter.*.2", []byte("EOF"))
-		fmt.Println(err)
-		err = p.middleware.PublishInExchange(filtered_games, "shooter.*.3", []byte("EOF"))
-		fmt.Println(err)
-		err = p.middleware.PublishInExchange(filtered_games, "shooter.*.4", []byte("EOF"))
-		fmt.Println(err)
-		err = p.middleware.PublishInExchange(filtered_games, "indie.*.0", []byte("EOF"))
-		fmt.Println(err)
-		err = p.middleware.PublishInExchange(filtered_games, "indie.*.1", []byte("EOF"))
-		fmt.Println(err)
-		err = p.middleware.PublishInExchange(filtered_games, "indie.*.2", []byte("EOF"))
-		fmt.Println(err)
-		err = p.middleware.PublishInExchange(filtered_games, "indie.*.3", []byte("EOF"))
-		fmt.Println(err)
-		err = p.middleware.PublishInExchange(filtered_games, "indie.*.4", []byte("EOF"))
-		fmt.Println(err)
-		err = p.middleware.PublishInExchange(filtered_games, "indie.2010.*", []byte("EOF"))
-		fmt.Println(err)
-		return err
+		p.middleware.PublishInExchange(filtered_games, "shooter.*.0", []byte("EOF"))
+		p.middleware.PublishInExchange(filtered_games, "shooter.*.1", []byte("EOF"))
+		p.middleware.PublishInExchange(filtered_games, "shooter.*.2", []byte("EOF"))
+		p.middleware.PublishInExchange(filtered_games, "shooter.*.3", []byte("EOF"))
+		p.middleware.PublishInExchange(filtered_games, "shooter.*.4", []byte("EOF"))
+		p.middleware.PublishInExchange(filtered_games, "indie.*.0", []byte("EOF"))
+		p.middleware.PublishInExchange(filtered_games, "indie.*.1", []byte("EOF"))
+		p.middleware.PublishInExchange(filtered_games, "indie.*.2", []byte("EOF"))
+		p.middleware.PublishInExchange(filtered_games, "indie.*.3", []byte("EOF"))
+		p.middleware.PublishInExchange(filtered_games, "indie.*.4", []byte("EOF"))
+		p.middleware.PublishInExchange(filtered_games, "indie.2010.*", []byte("EOF"))
+		log.Infof("action: sending_games_EOF | result: success")
+		return nil
 	}
 
 	lenGames := binary.BigEndian.Uint64(msg[:8])

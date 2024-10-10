@@ -3,7 +3,6 @@ package common
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"os"
 	"os/signal"
 	"strconv"
@@ -123,11 +122,12 @@ func (p *ReviewMapper) sendEOF() error {
 
 func (p *ReviewMapper) mapReview(review protocol.Review) protocol.MappedReview {
 	isPositive := review.ReviewScore == 1
-	if language, exists := p.languageDetector.DetectLanguageOf(review.ReviewText); exists {
-		return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: isPositive && language == lingua.English}
-	} else {
-		return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: false}
-	}
+	// if language, exists := p.languageDetector.DetectLanguageOf(review.ReviewText); exists {
+	// 	return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: isPositive && language == lingua.English}
+	// } else {
+	// 	return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: false}
+	// }
+	return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: true}
 }
 
 func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
@@ -171,7 +171,7 @@ func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 }
 
 func (p *ReviewMapper) sendReview(review []byte, gameRange int) error {
-	err := p.middleware.PublishInExchange(filtered_reviews, fmt.Sprintf("%s", string(gameRange)), review)
+	err := p.middleware.PublishInExchange(filtered_reviews, strconv.Itoa(gameRange), review)
 	if err != nil {
 		return err
 	}

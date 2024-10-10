@@ -124,7 +124,7 @@ func (p *PlatformAccumulator) countGames(msg []byte, _ *bool) error {
 	}
 	p.count.IncrementVals(counter.Windows, counter.Linux, counter.Mac)
 
-	log.Infof("Counter Resultado PARCIAL : Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
+	log.Debugf("Counter Resultado PARCIAL : Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
 
 	return nil
 }

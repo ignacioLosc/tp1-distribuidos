@@ -16,7 +16,10 @@ import (
 var log = logging.MustGetLogger("log")
 
 const (
-	joined_reviews_queue = "joined_reviews"
+	shooter_negative_joined_queue = "joined_shooter_negative"
+	shooter_positive_joined_queue = "joined_shooter_positive"
+	indies_joined_queue = "joined_reviews_indies"
+
 	filtered_games       = "filtered_games"
 	filtered_reviews     = "filtered_reviews"
 )
@@ -57,7 +60,17 @@ func NewJoiner(config JoinerConfig) (*Joiner, error) {
 }
 
 func (c *Joiner) middlewareInit() error {
-	_, err := c.middleware.DeclareDirectQueue(joined_reviews_queue)
+	_, err := c.middleware.DeclareDirectQueue(shooter_negative_joined_queue)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.middleware.DeclareDirectQueue(shooter_positive_joined_queue)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.middleware.DeclareDirectQueue(indies_joined_queue)
 	if err != nil {
 		return err
 	}
@@ -140,13 +153,24 @@ func (j *Joiner) Start() {
 
 func (j *Joiner) sendJoinedResults() {
 	for appId, gameReviewCount := range j.savedGameReviewCounts {
-		log.Infof("PRINTING joined results for appId: %s -> ", appId, gameReviewCount)
+		err := j.middleware.PublishInQueue(shooter_negative_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
+		if err != nil {
+			log.Errorf("Error publishing game review count to shooter negative joined queue: %s", err)
+			continue
+		}
 
-		// err := j.middleware.PublishToDirect(joined_reviews_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
-		// if err != nil {
-		// 	log.Errorf("Error publishing game review count: %s", err)
-		// }
-		//
+		err = j.middleware.PublishInQueue(shooter_positive_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
+		if err != nil {
+			log.Errorf("Error publishing game review count to shooter positive joined queue: %s", err)
+			continue
+		}
+
+		err = j.middleware.PublishInQueue(indies_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
+		if err != nil {
+			log.Errorf("Error publishing game review count to indies joined queue: %s", err)
+			continue
+		}
+
 		delete(j.savedGameReviewCounts, appId)
 	}
 }
@@ -198,5 +222,6 @@ func (p *Joiner) joinReviewsAndGames(msg []byte, finished *bool) error {
 		gameReviewCount.PositiveEnglishReviewCount++
 	}
 
+	p.savedGameReviewCounts[mappedReview.AppID] = gameReviewCount
 	return nil
 }
