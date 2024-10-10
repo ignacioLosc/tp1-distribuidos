@@ -176,6 +176,88 @@ func (m *Middleware) ConsumeAndProcess(queueName string, processFunction func([]
 	}
 }
 
+
+func (m *Middleware) ConsumeMultipleAndProcess(queueName1 string, queueName2 string, processFunction1 func([]byte, *bool) error, processFunction2 func([]byte, *bool) error) {
+	msgs1, err := m.ch.Consume(
+		queueName1, // queue
+		"",        // consumer
+		false,     // auto-ack
+		false,     // exclusive
+		false,     // no-local
+		false,     // no-wait
+		nil,       // args
+	)
+	if err != nil {
+		log.Errorf("Error consuming message: %s", err)
+		return
+	}
+
+	msgs2, err := m.ch.Consume(
+		queueName2, // queue
+		"",        // consumer
+		false,     // auto-ack
+		false,     // exclusive
+		false,     // no-local
+		false,     // no-wait
+		nil,       // args
+	)
+	if err != nil {
+		log.Errorf("Error consuming message: %s", err)
+		return
+	}
+
+	finished := false
+
+	for !finished {
+		select {
+		case d, ok := <-msgs1:
+			if !ok {
+				log.Errorf("Error (!ok) consuming message: %s", err)
+				return
+			}
+
+			err := processFunction1(d.Body, &finished)
+			if err != nil {
+				log.Errorf("Error processing message: %s", err)
+				return
+			}
+
+			err = d.Ack(false)
+			if err != nil {
+				log.Errorf("Error acknowledging rabbitmq message: %s", err)
+				return
+			}
+
+			if finished {
+				log.Info("Finished processing")
+				return
+			}
+		case d, ok := <-msgs2:
+			if !ok {
+				log.Errorf("Error (!ok) consuming message: %s", err)
+				return
+			}
+
+			err := processFunction2(d.Body, &finished)
+			if err != nil {
+				log.Errorf("Error processing message: %s", err)
+				return
+			}
+
+			err = d.Ack(false)
+			if err != nil {
+				log.Errorf("Error acknowledging rabbitmq message: %s", err)
+				return
+			}
+
+			if finished {
+				log.Info("Finished processing")
+				return
+			}
+		}
+	}
+}
+
 func (m *Middleware) ConsumeExchange(queueName string, processFunction func([]byte, string, *bool) error) {
 	msgs, err := m.ch.Consume(
 		queueName, // queue
