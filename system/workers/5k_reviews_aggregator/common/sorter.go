@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"encoding/binary"
 	"os"
 	"os/signal"
 	"syscall"
@@ -95,6 +96,7 @@ func (p *Aggregator) Start() {
 			return
 		default:
 			p.middleware.ConsumeAndProcess(action_negative_reviews, p.filterGames)
+			p.sendGames()
 		}
 
 	}
@@ -105,15 +107,20 @@ type GameSummary struct {
 	AveragePlaytimeForever int
 }
 
-func (p *Aggregator) sendGame(game protocol.GameReviewCount) {
+func (p *Aggregator) sendGames() {
 	gamesBuffer := make([]byte, 8)
-	gameBuffer := protocol.SerializeGameReviewCount(&game)
-	gamesBuffer = append(gamesBuffer, gameBuffer...)
+	l := len(p.games)
+	binary.BigEndian.PutUint64(gamesBuffer, uint64(l))
+
+	for _, game := range p.games {
+		gameBuffer := protocol.SerializeGameReviewCount(&game)
+		gamesBuffer = append(gamesBuffer, gameBuffer...)
+	}
 	p.middleware.PublishInExchange(results_exchange, query_key, gamesBuffer)
 }
 
 func (p *Aggregator) shouldKeep(game prot.GameReviewCount) (bool, error) {
-	if p.games[0].PositiveEnglishReviewCount > 5000 {
+	if game.PositiveEnglishReviewCount > 5000 {
 		return true, nil
 	} else {
 		return false, nil
@@ -139,8 +146,8 @@ func (p *Aggregator) filterGames(msg []byte, finished *bool) error {
 		return err
 	}
 	if shouldKeep {
-		log.Info("Sending game:", game.AppName, game.PositiveReviewCount, game.NegativeReviewCount, game.PositiveEnglishReviewCount)
-		p.sendGame(game)
+		log.Info("Keeping game:", game.AppName, game.PositiveReviewCount, game.NegativeReviewCount, game.PositiveEnglishReviewCount)
+		p.games = append(p.games, game)
 	}
 
 	return nil

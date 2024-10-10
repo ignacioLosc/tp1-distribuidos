@@ -122,10 +122,10 @@ func (p *PercentileCalculator) calculatePercentile() {
 
 func (p *PercentileCalculator) sendGames(games []protocol.GameReviewCount) {
 	gamesBuffer := make([]byte, 8)
-	l := len(p.games)
+	l := len(games)
 	binary.BigEndian.PutUint64(gamesBuffer, uint64(l))
 
-	for _, game := range p.games {
+	for _, game := range games {
 		gameBuffer := protocol.SerializeGameReviewCount(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
