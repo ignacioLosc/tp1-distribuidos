@@ -403,22 +403,22 @@ services:
     networks:
       - testing_net_tp1
 
-  # 5k-reviews-aggregator:
-  #   build:
-  #     context: .
-  #     dockerfile: ./system/Dockerfile
-  #     args:
-  #       WORKER: "5k_reviews_aggregator"
-  #   container_name: 5k-reviews-aggregator
-  #   environment:
-  #     - CLI_SERVER_PORT=5672
-  #     - CLI_LOG_LEVEL=INFO
-  #     - CLI_SORTERS=5
-  #   entrypoint: /app/5k_reviews_aggregator
-  #   depends_on:
-  #     - gateway
-  #   networks:
-  #     - testing_net_tp1
+  5k-reviews-aggregator:
+    build:
+      context: .
+      dockerfile: ./system/Dockerfile
+      args:
+        WORKER: "5k_reviews_aggregator"
+    container_name: 5k-reviews-aggregator
+    environment:
+      - CLI_SERVER_PORT=5672
+      - CLI_LOG_LEVEL=INFO
+      - CLI_SORTERS=5
+    entrypoint: /app/5k_reviews_aggregator
+    depends_on:
+      - gateway
+    networks:
+      - testing_net_tp1
 
 
 
