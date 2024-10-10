@@ -19,6 +19,7 @@ var log = logging.MustGetLogger("log")
 
 type ServerConfig struct {
 	ServerPort string
+	NumCounters int
 }
 
 type Server struct {
@@ -201,6 +202,7 @@ func (s *Server) waitForResults(conn net.Conn) {
 			log.Errorf("invalid routing key")
 		}
 
+		log.Info("PRINTING THE RESULT i'M SENDING", stringResult)
 		data, err := utils.SerializeString(stringResult)
 		if err != nil {
 			return fmt.Errorf("failed to serialize data: %w.", err)
@@ -272,16 +274,14 @@ func (s *Server) listenOnChannels(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case games := <-s.gamesChan:
-
+			s.middleware.PublishInQueue("games_to_filter", games)
 			if string(games) == "EOF" {
-				for i := 0; i < 3; i++ {
+				for i := 0; i < s.config.NumCounters; i++ {
 					s.middleware.PublishInQueue("games_to_count", games)
-					s.middleware.PublishInQueue("games_to_filter", games)
 				}
 				continue
 			} else {
 				s.middleware.PublishInQueue("games_to_count", games)
-				s.middleware.PublishInQueue("games_to_filter", games)
 			}
 		case review := <-s.reviewsChan:
 			s.middleware.PublishInQueue("reviews", review)

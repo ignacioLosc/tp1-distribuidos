@@ -45,9 +45,10 @@ func InitLogger(logLevel string) error {
 }
 
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s",
+	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | num_counters: %d",
 		v.GetString("server.port"),
 		v.GetString("log.level"),
+		v.GetInt("counters"),
 	)
 }
 
@@ -64,7 +65,8 @@ func main() {
 	PrintConfig(v)
 
 	config := common.ServerConfig{
-		ServerPort: v.GetString("server.port"),
+		ServerPort:  v.GetString("server.port"),
+		NumCounters: v.GetInt("counters"),
 	}
 	server, err := common.NewServer(config)
 
