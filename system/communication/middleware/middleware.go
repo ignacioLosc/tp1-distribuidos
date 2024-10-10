@@ -63,6 +63,24 @@ func (m *Middleware) DeclareDirectQueue(name string) (string, error) {
 	return q.Name, nil
 }
 
+func (m *Middleware) DeclareTemporaryQueue() (string, error) {
+	q, err := m.ch.QueueDeclare(
+		"",  // name
+		false,  // durable
+		false, // delete when unused
+		true, // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+
+	if err != nil {
+		return "", err
+	}
+
+	m.queues[q.Name] = q
+	return q.Name, nil
+}
+
 func (m *Middleware) DeclareExchange(name string, exchangeType string) error {
 	return m.ch.ExchangeDeclare(
 		name,         // name

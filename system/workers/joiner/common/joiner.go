@@ -75,13 +75,13 @@ func (c *Joiner) middlewareInit() error {
 		return err
 	}
 
-	name, err := c.middleware.DeclareDirectQueue("")
+	name, err := c.middleware.DeclareTemporaryQueue()
 	if err != nil {
 		return err
 	}
 	c.gamesQueue = name
 
-	name, err = c.middleware.DeclareDirectQueue("")
+	name, err = c.middleware.DeclareTemporaryQueue()
 	if err != nil {
 		return err
 	}
