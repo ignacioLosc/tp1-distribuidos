@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"example.com/system/communication/middleware"
 	"example.com/system/communication/protocol"
@@ -17,10 +16,9 @@ import (
 var log = logging.MustGetLogger("log")
 
 const (
-	games_queue      = "games_to_join"
-	reviews_queue    = "reviews_to_join"
-	filtered_games   = "filtered_games"
-	filtered_reviews = "filtered_reviews"
+	joined_reviews_queue = "joined_reviews"
+	filtered_games       = "filtered_games"
+	filtered_reviews     = "filtered_reviews"
 )
 
 type JoinerConfig struct {
@@ -30,11 +28,11 @@ type JoinerConfig struct {
 }
 
 type Joiner struct {
-	middleware   *middleware.Middleware
-	config       JoinerConfig
-	savedGames   []protocol.Game
-	gamesQueue   string
-	reviewsQueue string
+	middleware            *middleware.Middleware
+	config                JoinerConfig
+	gamesQueue            string
+	reviewsQueue          string
+	savedGameReviewCounts map[string]protocol.GameReviewCount
 }
 
 func NewJoiner(config JoinerConfig) (*Joiner, error) {
@@ -47,6 +45,7 @@ func NewJoiner(config JoinerConfig) (*Joiner, error) {
 	joiner := &Joiner{
 		config:     config,
 		middleware: middleware,
+		savedGameReviewCounts: make(map[string]protocol.GameReviewCount),
 	}
 
 	err = joiner.middlewareInit()
@@ -58,18 +57,21 @@ func NewJoiner(config JoinerConfig) (*Joiner, error) {
 }
 
 func (c *Joiner) middlewareInit() error {
-	name, err := c.middleware.DeclareDirectQueue("")
+	_, err := c.middleware.DeclareDirectQueue(joined_reviews_queue)
 	if err != nil {
 		return err
 	}
 
+	name, err := c.middleware.DeclareDirectQueue("")
+	if err != nil {
+		return err
+	}
 	c.gamesQueue = name
 
 	name, err = c.middleware.DeclareDirectQueue("")
 	if err != nil {
 		return err
 	}
-
 	c.reviewsQueue = name
 
 	err = c.middleware.DeclareExchange(filtered_games, "topic")
@@ -113,7 +115,6 @@ func (j *Joiner) signalListener(cancel context.CancelFunc) {
 }
 
 func (j *Joiner) Start() {
-	log.Info("Starting joiner")
 	defer j.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -125,32 +126,48 @@ func (j *Joiner) Start() {
 		case <-ctx.Done():
 			return
 		default:
-			log.Info("QUEUE NAME: ", j.gamesQueue)
+			log.Info("Joiner reading games")
 			j.middleware.ConsumeAndProcess(j.gamesQueue, j.saveGames)
 
-			log.Info("QUEUE NAME: ", j.reviewsQueue)
+			log.Info("Joiner reading reviews")
 			j.middleware.ConsumeAndProcess(j.reviewsQueue, j.joinReviewsAndGames)
 
-			time.Sleep(5 * time.Second)
+			log.Info("Joiner finished reading games and reviews")
+			j.sendJoinedResults()
 		}
 	}
 }
 
-func (p *Joiner) saveGames(msg []byte, finished *bool) error {
-	log.Info("Calling saveGames")
+func (j *Joiner) sendJoinedResults() {
+	for appId, gameReviewCount := range j.savedGameReviewCounts {
+		log.Infof("PRINTING joined results for appId: %s -> ", appId, gameReviewCount)
 
+		// err := j.middleware.PublishToDirect(joined_reviews_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
+		// if err != nil {
+		// 	log.Errorf("Error publishing game review count: %s", err)
+		// }
+		//
+		delete(j.savedGameReviewCounts, appId)
+	}
+}
+
+func (p *Joiner) saveGames(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
 		*finished = true
 		return nil
 	}
 
 	game, err, _ := protocol.DeserializeGame(msg)
-	log.Info("Received game: %s", game)
 	if err != nil {
 		return fmt.Errorf("Error deserializing game: %s", err)
 	}
 
-	p.savedGames = append(p.savedGames, game)
+	p.savedGameReviewCounts[game.AppID]  = protocol.GameReviewCount{
+		AppName:                    game.Name,
+		PositiveReviewCount:        0,
+		NegativeReviewCount:        0,
+		PositiveEnglishReviewCount: 0,
+	}
 
 	return nil
 }
@@ -159,6 +176,26 @@ func (p *Joiner) joinReviewsAndGames(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
 		*finished = true
 		return nil
+	}
+
+	mappedReview, err, _ := protocol.DeserializeMappedReview(msg)
+	if err != nil {
+		return fmt.Errorf("Error deserializing review: %s", err)
+	}
+
+	gameReviewCount, ok := p.savedGameReviewCounts[mappedReview.AppID]
+	if !ok {
+		return fmt.Errorf("No saved game review count found for appId: %s", mappedReview.AppID)
+	}
+
+	if mappedReview.IsPositive {
+		gameReviewCount.PositiveReviewCount++
+	}
+	if mappedReview.IsNegative {
+		gameReviewCount.NegativeReviewCount++
+	}
+	if mappedReview.IsPositiveEnglish {
+		gameReviewCount.PositiveEnglishReviewCount++
 	}
 
 	return nil

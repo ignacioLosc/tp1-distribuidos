@@ -187,7 +187,7 @@ func (p *Sorter) sortGames(msg []byte, finished *bool) error {
 		return err
 	}
 	if shouldKeep {
-		log.Info("Keeping game:", game.AppID, game.ReleaseDate, game.AveragePlaytimeForever, shouldKeep)
+		log.Debug("Keeping game:", game.AppID, game.ReleaseDate, game.AveragePlaytimeForever, shouldKeep)
 		p.saveGame(game, top)
 	}
 

@@ -206,13 +206,13 @@ services:
     networks:
       - testing_net_tp1
 
-  joiner0-Indie:
+  joiner0-indie:
     build:
       context: .
       dockerfile: ./system/Dockerfile
       args:
-        WORKER: "joiner-Indie"
-    container_name: joiner0
+        WORKER: "joiner"
+    container_name: joiner0-indie
     environment:
       - CLI_SERVER_PORT=5672
       - CLI_LOG_LEVEL=INFO
@@ -224,13 +224,13 @@ services:
     networks:
       - testing_net_tp1
 
-  joiner1-Indie:
+  joiner1-indie:
     build:
       context: .
       dockerfile: ./system/Dockerfile
       args:
         WORKER: "joiner"
-    container_name: joiner1-Indie
+    container_name: joiner1-indie
     environment:
       - CLI_SERVER_PORT=5672
       - CLI_LOG_LEVEL=INFO
@@ -242,13 +242,13 @@ services:
     networks:
       - testing_net_tp1
 
-  joiner2-Indie:
+  joiner2-indie:
     build:
       context: .
       dockerfile: ./system/Dockerfile
       args:
         WORKER: "joiner"
-    container_name: joiner2-Indie
+    container_name: joiner2-indie
     environment:
       - CLI_SERVER_PORT=5672
       - CLI_LOG_LEVEL=INFO
@@ -260,13 +260,13 @@ services:
     networks:
       - testing_net_tp1
 
-  joiner3-Indie:
+  joiner3-indie:
     build:
       context: .
       dockerfile: ./system/Dockerfile
       args:
         WORKER: "joiner"
-    container_name: joiner3-Indie
+    container_name: joiner3-indie
     environment:
       - CLI_SERVER_PORT=5672
       - CLI_LOG_LEVEL=INFO
@@ -278,13 +278,13 @@ services:
     networks:
       - testing_net_tp1
 
-  joiner4-Indie:
+  joiner4-indie:
     build:
       context: .
       dockerfile: ./system/Dockerfile
       args:
         WORKER: "joiner"
-    container_name: joiner4-Indie
+    container_name: joiner4-indie
     environment:
       - CLI_SERVER_PORT=5672
       - CLI_LOG_LEVEL=INFO
