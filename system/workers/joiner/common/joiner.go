@@ -105,7 +105,6 @@ func (c *Joiner) middlewareInit() error {
 	}
 
 	err = c.middleware.BindQueueToExchange(filtered_reviews, c.reviewsQueue, c.config.Id)
-	log.Infof("Binding games queue to exchange with topic: %s", c.config.Id, c.reviewsQueue)
 	if err != nil {
 		log.Errorf("Error binding reviews queue to exchange: %s", err)
 		return err

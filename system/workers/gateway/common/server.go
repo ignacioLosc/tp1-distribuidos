@@ -78,6 +78,7 @@ func middlewareGatewayInit() (*mw.Middleware, error) {
 	middleware.DeclareDirectQueue("reviews")
 
 	middleware.DeclareExchange("results", "direct")
+	middleware.DeclareExchange("end_of_games", "fanout")
 	middleware.DeclareDirectQueue("query_results")
 
 	middleware.BindQueueToExchange("results", "query_results", "query1")
@@ -275,10 +276,7 @@ func (s *Server) listenOnChannels(ctx context.Context) {
 		case games := <-s.gamesChan:
 			s.middleware.PublishInQueue("games_to_filter", games)
 			if string(games) == "EOF" {
-				for i := 0; i < s.config.NumCounters; i++ {
-					s.middleware.PublishInQueue("games_to_count", games)
-				}
-				continue
+				s.middleware.PublishInExchange("end_of_games", "", []byte("EOF"))
 			} else {
 				s.middleware.PublishInQueue("games_to_count", games)
 			}

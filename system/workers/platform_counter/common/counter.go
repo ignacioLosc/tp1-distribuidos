@@ -28,6 +28,7 @@ type PlatformCounter struct {
 	config     PlatformCounterConfig
 	middleware *mw.Middleware
 	count      prot.PlatformCount
+	endOfGamesQueue string
 }
 
 func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error) {
@@ -61,6 +62,23 @@ func (p PlatformCounter) middlewareCounterInit() error {
 	if err != nil {
 		return err
 	}
+
+	qName, err := p.middleware.DeclareTemporaryQueue()
+	if err != nil {
+		return err
+	}
+	p.endOfGamesQueue = qName
+
+	err = p.middleware.DeclareExchange("end_of_games", "fanout")
+	if err != nil {
+		return err
+	}
+
+	err = p.middleware.BindQueueToExchange("end_of_games", p.endOfGamesQueue, "")
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -87,7 +105,7 @@ func (p *PlatformCounter) Start() {
 		case <-ctx.Done():
 			return
 		default:
-			p.middleware.ConsumeAndProcess(games_to_count, p.countGames)
+			p.middleware.ConsumeMultipleAndProcess(games_to_count, p.endOfGamesQueue, p.countGames, p.endCounting)
 			err := p.sendResults()
 			if err != nil {
 				log.Error("Error sending results: %v", err)
@@ -100,10 +118,16 @@ func (p *PlatformCounter) Start() {
 	}
 }
 
+func (p *PlatformCounter) endCounting(msg []byte, finished *bool) error {
+	log.Info("MESSAGE ON QUEUE 2", string(msg))
+	if string(msg) == "EOF" {
+		*finished = true
+	}
+	return nil
+}
+
 func (p *PlatformCounter) countGames(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
-		log.Info("Received EOF. Stopping")
-		*finished = true
 		return nil
 	}
 
