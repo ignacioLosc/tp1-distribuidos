@@ -18,7 +18,7 @@ import (
 var log = logging.MustGetLogger("log")
 
 const (
-	game_positive_reviews = "game_positive_reviews"
+	game_positive_reviews = "joined_reviews_indies"
 	top_5_partial_results = "top_5_partial_results"
 )
 
