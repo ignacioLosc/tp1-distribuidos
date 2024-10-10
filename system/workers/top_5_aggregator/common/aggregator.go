@@ -30,10 +30,10 @@ type AggregatorConfig struct {
 }
 
 type Aggregator struct {
-	middleware *middleware.Middleware
-	config     AggregatorConfig
-	stop       chan bool
-	games      []protocol.GameReviewCount
+	middleware    *middleware.Middleware
+	config        AggregatorConfig
+	stop          chan bool
+	games         []protocol.GameReviewCount
 	finishedCount int
 }
 
@@ -44,9 +44,9 @@ func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
 		return nil, err
 	}
 	controller := &Aggregator{
-		config:     config,
-		middleware: middleware,
-		games:      make([]prot.GameReviewCount, 0),
+		config:        config,
+		middleware:    middleware,
+		games:         make([]prot.GameReviewCount, 0),
 		finishedCount: 0,
 	}
 
@@ -167,9 +167,11 @@ func (p *Aggregator) aggregateGames(msg []byte, finished *bool) error {
 
 		return nil
 	}
+	lenGames := binary.BigEndian.Uint64(msg[:8])
 
-	for idx, _ := range p.config.Top {
-		game, err, _ := protocol.DeserializeGameReviewCount(msg[idx:])
+	index := 8
+	for i := 0; i < int(lenGames); i++ {
+		game, err, j := protocol.DeserializeGameReviewCount(msg[index:])
 		if err != nil {
 			log.Errorf("Failed to deserialize games", err)
 			return err
@@ -190,6 +192,7 @@ func (p *Aggregator) aggregateGames(msg []byte, finished *bool) error {
 			log.Info("Keeping game:", game.AppName, game.PositiveReviewCount, game.NegativeReviewCount, game.PositiveEnglishReviewCount)
 			p.saveGame(game, top)
 		}
+		index += j
 
 	}
 
