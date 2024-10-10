@@ -1,0 +1,7 @@
+{
+	"GAMES_FILE": "./.data/games.csv",
+	"REVIEWS_FILE": "./.data/dataset.csv",
+	"NUM_JOINERS": 5,
+	"NUM_SORTERS": 5,
+	"LOG_LEVEL": "INFO"
+}

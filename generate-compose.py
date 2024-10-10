@@ -1,10 +1,12 @@
 import yaml
+import json
+import argparse
 
 NETWORK_NAME='testing_net_tp1'
 DEFAULT_LOG_LEVEL='INFO'
 DOCKER_COMPOSE_FILENAME='docker-compose.yaml'
 
-def basic_service(worker, env: list = [], container_name=None):
+def basic_service(worker, env: list = [], container_name=None, log_level=DEFAULT_LOG_LEVEL):
     obj = {
         'build': {
             'context': '.',
@@ -14,7 +16,7 @@ def basic_service(worker, env: list = [], container_name=None):
             }
         },
         'entrypoint': f'/app/{worker}',
-        'environment': [f'CLI_LOG_LEVEL={DEFAULT_LOG_LEVEL}'] + env,
+        'environment': [f'CLI_LOG_LEVEL={log_level}'] + env,
         'networks': [NETWORK_NAME]
     }
 
@@ -29,7 +31,7 @@ def basic_service(worker, env: list = [], container_name=None):
     return obj
 
 
-def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num_sorters=5):
+def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num_sorters=5, num_mappers=1, num_counters=1):
     services = {}
     for worker in worker_list:
         services[worker] = basic_service(worker) 
@@ -46,14 +48,28 @@ def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num
     services['5k_reviews_aggregator']['environment'].append(f'CLI_SORTERS={num_sorters}')
     services['90th_percentile_calculator']['environment'].append(f'CLI_SORTERS={num_sorters}')
 
+    services['genre_filter']['environment'].append(f'CLI_JOINERS={num_joiners}')
+    services['review_mapper']['environment'].append(f'CLI_JOINERS={num_joiners}')
+
+    services['platform_accumulator']['environment'].append(f'CLI_COUNTERS={num_counters}')
+
     for genre in ['Shooter', 'Indie']:
         for i in range(num_joiners):
             joiner_name = f'joiner{i}-{genre.lower()}'
             services[joiner_name] = basic_service('joiner', [f'CLI_JOINER_ID={i}', f'CLI_JOINER_GENRE={genre}'], joiner_name)
 
-    for i in range(num_joiners):
-        sorter_name = f'positive-sorter-{i}'
-        services[sorter_name] = basic_service('positive_sorter_top_5', [f'CLI_SORTER_ID={i}'], sorter_name)
+    for i in range(num_sorters):
+        name = f'positive-sorter-{i}'
+        services[name] = basic_service('positive_sorter_top_5', [f'CLI_SORTER_ID={i}'], name)
+
+    for i in range(num_mappers):
+        nam = f'{i}'
+        services[nam] = basic_service('review_mapper', [f'CLI_MAPPER_ID={i}'], nam)
+
+    for i in range(num_counters):
+        name = f'{i}'
+        services[name] = basic_service('platform_counter', [f'CLI_COUNTER_ID={i}'], name)
+
 
     compose_data = {
         'name': 'steam-analyzer',
@@ -69,8 +85,32 @@ def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num
     with open(DOCKER_COMPOSE_FILENAME, 'w') as file:
         yaml.dump(compose_data, file, default_flow_style=False)
 
+def open_config(filename='config.json'):
+    try: 
+        with open(filename) as file:
+            return json.load(file)
+    except FileNotFoundError:
+        print(f"File {filename} not found.")
+        exit(1)
+    except json.JSONDecodeError:
+        print(f"File {filename} is not a valid JSON file.")
+        exit(1)
+    except Exception as e:
+        print(f"An error occurred while opening the file {filename}: {e}")
+        exit(1)
 
-# Example usage
+parser = argparse.ArgumentParser(description='Load a JSON config file.')
+parser.add_argument(
+    '--config_file',
+    type=str,
+    default='config.json',
+    help='Path to the JSON config file (optional)'
+)
+
+args = parser.parse_args()
+config = open_config(args.config_file)
+
+
 worker_list = [
     "client",
     "gateway",
@@ -78,14 +118,30 @@ worker_list = [
     "5k_reviews_aggregator",
     "genre_filter",
     "platform_accumulator",
-    "platform_counter",
-    "review_mapper",
     "time_played_sorter",
     "top_5_aggregator"
 
+    # "platform_counter",
+    # "review_mapper",
     # "positive_sorter_top_5",
     # "joiner"
 ]
 
-client_volumes = ['./data/games.csv:/app/games.csv', './data/dataset.csv:/app/dataset.csv']
-generate_docker_compose(worker_list, client_volumes, num_joiners=5, num_sorters=5)
+game_file = config['GAMES_FILE'] 
+if not game_file:
+    print("Please provide the games file path ('GAMES_FILE') in the config ")
+    exit(1)
+
+reviews_file = config['REVIEWS_FILE'] 
+if not game_file:
+    print("Please provide the reviews file path ('REVIEWS_FILE') in the config")
+    exit(1)
+
+client_volumes = [f'{game_file}:/app/games.csv', f'{reviews_file}:/app/dataset.csv']
+generate_docker_compose(worker_list,
+                        client_volumes,
+                        num_joiners=config.get("NUM_JOINERS", None),
+                        num_sorters=config.get("NUM_SORTERS", None),
+                        num_mappers=config.get("NUM_MAPPERS", None),
+                        num_counters=config.get("NUM_COUNTERS", None)
+                        )
