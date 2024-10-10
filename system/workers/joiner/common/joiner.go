@@ -105,6 +105,7 @@ func (c *Joiner) middlewareInit() error {
 	}
 
 	err = c.middleware.BindQueueToExchange(filtered_reviews, c.reviewsQueue, c.config.Id)
+	log.Infof("Binding games queue to exchange with topic: %s", c.config.Id, c.reviewsQueue)
 	if err != nil {
 		log.Errorf("Error binding reviews queue to exchange: %s", err)
 		return err
@@ -153,25 +154,42 @@ func (j *Joiner) Start() {
 
 func (j *Joiner) sendJoinedResults() {
 	for appId, gameReviewCount := range j.savedGameReviewCounts {
-		err := j.middleware.PublishInQueue(shooter_negative_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
-		if err != nil {
-			log.Errorf("Error publishing game review count to shooter negative joined queue: %s", err)
-			continue
-		}
+		if j.config.Genre == "Indie" {
+			err := j.middleware.PublishInQueue(indies_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
+			if err != nil {
+				log.Errorf("Error publishing game review count to indies joined queue: %s", err)
+				continue
+			}
+		} else if j.config.Genre == "Shooter" {
+			err := j.middleware.PublishInQueue(shooter_negative_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
+			if err != nil {
+				log.Errorf("Error publishing game review count to shooter negative joined queue: %s", err)
+				continue
+			}
 
-		err = j.middleware.PublishInQueue(shooter_positive_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
-		if err != nil {
-			log.Errorf("Error publishing game review count to shooter positive joined queue: %s", err)
-			continue
-		}
-
-		err = j.middleware.PublishInQueue(indies_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
-		if err != nil {
-			log.Errorf("Error publishing game review count to indies joined queue: %s", err)
-			continue
+			err = j.middleware.PublishInQueue(shooter_positive_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
+			if err != nil {
+				log.Errorf("Error publishing game review count to shooter positive joined queue: %s", err)
+				continue
+			}
 		}
 
 		delete(j.savedGameReviewCounts, appId)
+	}
+
+	err := j.middleware.PublishInQueue(shooter_negative_joined_queue, []byte("EOF"))
+	if err != nil {
+		log.Errorf("Error publishing game review count to shooter negative joined queue: %s", err)
+	}
+
+	err = j.middleware.PublishInQueue(shooter_positive_joined_queue,[]byte("EOF")) 
+	if err != nil {
+		log.Errorf("Error publishing game review count to shooter positive joined queue: %s", err)
+	}
+
+	err = j.middleware.PublishInQueue(indies_joined_queue, []byte("EOF"))
+	if err != nil {
+		log.Errorf("Error publishing game review count to indies joined queue: %s", err)
 	}
 }
 

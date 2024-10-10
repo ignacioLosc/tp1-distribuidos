@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"os"
 	"os/signal"
@@ -130,6 +131,17 @@ func (p *ReviewMapper) mapReview(review protocol.Review) protocol.MappedReview {
 	return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: true}
 }
 
+func getRange(input string, r int) int {
+	h := sha256.New()
+	_, err := h.Write([]byte(input))
+	if err != nil {
+		return 0
+	}
+	hash := h.Sum(nil)
+	v := binary.BigEndian.Uint64(hash[:8]) 
+	return int(v) % r
+}
+
 func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
 		log.Info("Received EOF. Stopping")
@@ -152,12 +164,7 @@ func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 		mappedReview := p.mapReview(review)
 		reviewBuffer := protocol.SerializeMappedReview(&mappedReview)
 
-		appId, err := strconv.Atoi(review.AppID)
-		if err != nil {
-			return err
-		}
-		gameRange := appId % LEN_JOINERS
-
+		gameRange := getRange(review.AppID, LEN_JOINERS)
 		err = p.sendReview(reviewBuffer, gameRange)
 		if err != nil {
 			log.Error("Error sending mapped review: %v", err)

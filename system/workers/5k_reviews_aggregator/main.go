@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"example.com/system/workers/top_5_aggregator/common"
+	"example.com/system/workers/5k_reviews_aggregator/common"
 	"github.com/op/go-logging"
 	"github.com/spf13/viper"
 )

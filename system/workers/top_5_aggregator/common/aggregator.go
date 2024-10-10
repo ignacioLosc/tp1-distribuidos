@@ -34,6 +34,7 @@ type Aggregator struct {
 	config     AggregatorConfig
 	stop       chan bool
 	games      []protocol.GameReviewCount
+	finishedCount int
 }
 
 func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
@@ -46,6 +47,7 @@ func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
 		config:     config,
 		middleware: middleware,
 		games:      make([]prot.GameReviewCount, 0),
+		finishedCount: 0,
 	}
 
 	err = controller.middlewareInit()
@@ -152,7 +154,17 @@ func (p *Aggregator) saveGame(game prot.GameReviewCount, top int) error {
 func (p *Aggregator) aggregateGames(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
 		log.Info("Received EOF %s")
-		*finished = true
+		p.finishedCount++
+		top, err := strconv.Atoi(p.config.Top)
+		if err != nil {
+			log.Errorf("Failed to parse top number", err)
+			return err
+		}
+
+		if p.finishedCount == top {
+			*finished = true
+		}
+
 		return nil
 	}
 

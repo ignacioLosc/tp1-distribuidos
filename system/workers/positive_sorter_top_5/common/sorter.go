@@ -123,6 +123,7 @@ func (p *Sorter) sendResults() {
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
 	p.middleware.PublishInQueue(top_5_partial_results, gamesBuffer)
+	p.middleware.PublishInQueue(top_5_partial_results, []byte("EOF"))
 }
 
 func (p *Sorter) shouldKeep(game prot.GameReviewCount, sortBy string, top int) (bool, error) {
