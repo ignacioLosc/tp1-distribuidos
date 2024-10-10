@@ -84,8 +84,8 @@ func DeserializeMappedReview(bytes []byte) (MappedReview, error, int) {
 		return MappedReview{}, errorMessage, 0
 	}
 
-	appId := string(bytes[index:index+int(appIdLen)])
-	index += int(appIdLen) 
+	appId := string(bytes[index : index+int(appIdLen)])
+	index += int(appIdLen)
 
 	isPositive := bytes[index] == 1
 	index++

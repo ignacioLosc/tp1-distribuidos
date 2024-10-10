@@ -108,7 +108,12 @@ func (p *ReviewMapper) Start() {
 }
 
 func (p *ReviewMapper) sendEOF() error {
-	err := p.middleware.PublishInExchange(filtered_reviews, "*", []byte("EOF"))
+	log.Info("Sending EOF IN REVIEW MAPPER")
+	err := p.middleware.PublishInExchange(filtered_reviews, "0", []byte("EOF"))
+	err = p.middleware.PublishInExchange(filtered_reviews, "1", []byte("EOF"))
+	err = p.middleware.PublishInExchange(filtered_reviews, "2", []byte("EOF"))
+	err = p.middleware.PublishInExchange(filtered_reviews, "3", []byte("EOF"))
+	err = p.middleware.PublishInExchange(filtered_reviews, "4", []byte("EOF"))
 	if err != nil {
 		log.Info("Error: Couldn't send EOF")
 		return err

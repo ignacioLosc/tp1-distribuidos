@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 
 	"github.com/op/go-logging"
@@ -23,19 +24,20 @@ func SendAll(sock net.Conn, buf []byte) error {
 }
 
 func RecvAll(sock net.Conn, sz int) ([]byte, error) {
-	if sz < 0 {
-		return nil, fmt.Errorf("invalid size to read from buffer: %d", sz)
-	}
-	buffer := make([]byte, sz)
-	totalRead := 0
-	for totalRead < len(buffer) {
-		size, err := sock.Read(buffer)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read data: %w. Trying again.", err)
-		}
-		totalRead += size
-	}
-	return buffer, nil
+    buf := make([]byte, sz)
+    totalRead := 0
+
+    for totalRead < sz {
+        n, err := sock.Read(buf[totalRead:])
+        if err != nil {
+            if err == io.EOF {
+                return buf[:totalRead], nil 
+            }
+            return nil, err
+        }
+        totalRead += n
+    }
+    return buf, nil
 }
 
 func DeserealizeString(conn net.Conn) ([]byte, error) {
