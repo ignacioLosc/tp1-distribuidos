@@ -2,7 +2,7 @@ import yaml
 import json
 import argparse
 
-NETWORK_NAME='testing_net_tp1'
+NETWORK_NAME='steam_analyzer_net'
 DEFAULT_LOG_LEVEL='INFO'
 DOCKER_COMPOSE_FILENAME='docker-compose.yaml'
 
@@ -36,6 +36,23 @@ def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num
     for worker in worker_list:
         services[worker] = basic_service(worker) 
 
+    for genre in ['Shooter', 'Indie']:
+        for i in range(num_joiners):
+            joiner_name = f'joiner{i}-{genre.lower()}'
+            services[joiner_name] = basic_service('joiner', [f'CLI_JOINER_ID={i}', f'CLI_JOINER_GENRE={genre}'], joiner_name)
+
+    for i in range(num_sorters):
+        name = f'positive-sorter-{i}'
+        services[name] = basic_service('positive_sorter_top_5', [f'CLI_SORTER_ID={i}', 'CLI_TOP=5'], name)
+
+    for i in range(num_mappers):
+        name = f'review-mapper-{i}'
+        services[name] = basic_service('review_mapper', [f'CLI_MAPPER_ID={i}', f'CLI_JOINERS={num_joiners}'], name)
+
+    for i in range(num_counters):
+        name = f'platform-counter-{i}'
+        services[name] = basic_service('platform_counter', [f'CLI_COUNTER_ID={i}'], name)
+
     services['gateway']['environment'].append('CLI_SERVER_PORT=5555')
 
     services['client']['volumes'] = client_volumes if client_volumes else [
@@ -49,35 +66,16 @@ def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num
     services['90th_percentile_calculator']['environment'].append(f'CLI_SORTERS={num_sorters}')
 
     services['genre_filter']['environment'].append(f'CLI_JOINERS={num_joiners}')
-    services['review_mapper']['environment'].append(f'CLI_JOINERS={num_joiners}')
 
     services['platform_accumulator']['environment'].append(f'CLI_COUNTERS={num_counters}')
-
-    for genre in ['Shooter', 'Indie']:
-        for i in range(num_joiners):
-            joiner_name = f'joiner{i}-{genre.lower()}'
-            services[joiner_name] = basic_service('joiner', [f'CLI_JOINER_ID={i}', f'CLI_JOINER_GENRE={genre}'], joiner_name)
-
-    for i in range(num_sorters):
-        name = f'positive-sorter-{i}'
-        services[name] = basic_service('positive_sorter_top_5', [f'CLI_SORTER_ID={i}'], name)
-
-    for i in range(num_mappers):
-        nam = f'{i}'
-        services[nam] = basic_service('review_mapper', [f'CLI_MAPPER_ID={i}'], nam)
-
-    for i in range(num_counters):
-        name = f'{i}'
-        services[name] = basic_service('platform_counter', [f'CLI_COUNTER_ID={i}'], name)
-
 
     compose_data = {
         'name': 'steam-analyzer',
         'services': services,
         'networks': {
-            'testing_net_tp1': {
+            NETWORK_NAME: {
                 'external': True,
-                'name': 'testing_net_tp1'
+                'name': NETWORK_NAME
             }
         }
     }

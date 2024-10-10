@@ -3,5 +3,7 @@
 	"REVIEWS_FILE": "./.data/dataset.csv",
 	"NUM_JOINERS": 5,
 	"NUM_SORTERS": 5,
+	"NUM_COUNTERS": 1,
+	"NUM_MAPPERS": 1,
 	"LOG_LEVEL": "INFO"
 }
