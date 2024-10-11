@@ -226,7 +226,7 @@ func (p *Joiner) joinReviewsAndGames(msg []byte, finished *bool) error {
 
 	gameReviewCount, ok := p.savedGameReviewCounts[mappedReview.AppID]
 	if !ok {
-		return fmt.Errorf("No saved game review count found for appId: %s", mappedReview.AppID)
+		return nil
 	}
 
 	if mappedReview.IsPositive {

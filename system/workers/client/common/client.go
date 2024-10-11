@@ -161,7 +161,7 @@ func SendCSV(conn net.Conn, fileReader *csv.Reader, parser func([]string) ([]byt
 		return fmt.Errorf("Unable to read header from file: %v", err)
 	}
 
-	batchSize := 150
+	batchSize := 2
 	finished := false
 
 	for !finished {

@@ -157,7 +157,8 @@ func (p *GenreFilter) filterGames(msg []byte, finished *bool) error {
 
 		err = p.filterGame(game)
 		if err != nil {
-			return err
+			log.Errorf("Failed to filter game: %s", err)
+			return nil
 		}
 
 		index += j

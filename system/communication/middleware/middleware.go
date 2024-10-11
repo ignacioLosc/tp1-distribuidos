@@ -160,6 +160,10 @@ func (m *Middleware) ConsumeAndProcess(queueName string, processFunction func([]
 		err := processFunction(d.Body, &finished)
 		if err != nil {
 			log.Errorf("Error processing message: %s", err)
+			err := d.Nack(false, true) 
+			if err != nil {
+				log.Errorf("Error Nacknowledging rabbitmq message: %s", err)
+			}
 			return
 		}
 

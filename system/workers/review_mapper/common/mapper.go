@@ -123,12 +123,12 @@ func (p *ReviewMapper) sendEOF() error {
 
 func (p *ReviewMapper) mapReview(review protocol.Review) protocol.MappedReview {
 	isPositive := review.ReviewScore == 1
-	// if language, exists := p.languageDetector.DetectLanguageOf(review.ReviewText); exists {
-	// 	return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: isPositive && language == lingua.English}
-	// } else {
-	// 	return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: false}
-	// }
-	return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: true}
+	if language, exists := p.languageDetector.DetectLanguageOf(review.ReviewText); exists {
+		return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: isPositive && language == lingua.English}
+	} else {
+		return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: false}
+	}
+	// return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: true}
 }
 
 func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
