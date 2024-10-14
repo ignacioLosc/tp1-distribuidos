@@ -21,7 +21,7 @@ func InitConfig() (*viper.Viper, error) {
 
 	v.BindEnv("server", "address")
 	v.BindEnv("log", "level")
-	v.BindEnv("data_path", "path")
+	v.BindEnv("batch", "size")
 
 	return v, nil
 }
@@ -46,10 +46,10 @@ func InitLogger(logLevel string) error {
 }
 
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: sucess | server_address: %s | log_level: %s | data_path: %s",
+	log.Infof("action: config | result: sucess | server_address: %s | log_level: %s | batch_size: %d",
 		v.GetString("server.address"),
 		v.GetString("log.level"),
-		v.GetString("data_path.path"),
+		v.GetInt("batch.size"),
 	)
 }
 
@@ -69,7 +69,7 @@ func main() {
 
 	clientConfig := common.ClientConfig{
 		ServerAddress: v.GetString("server.address"),
-		DataPath:      v.GetString("data_path.path"),
+		BatchSize:     v.GetInt("batch.size"),
 	}
 
 	client, err := common.NewClient(clientConfig)

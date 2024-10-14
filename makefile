@@ -1,7 +1,7 @@
 NETWORK=steam_analyzer_net
 COMPOSE_FILE=docker-compose.yaml
 
-up:
+up: compose
 	docker compose -f ${COMPOSE_FILE} up -d --build
 .PHONY: run
 

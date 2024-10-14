@@ -4,3 +4,4 @@
 restart.sh
 docker-compose.yaml
 docker-compose.yml
+config.json

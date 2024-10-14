@@ -20,11 +20,11 @@ var log = logging.MustGetLogger("log")
 const (
 	reviews          = "reviews"
 	filtered_reviews = "filtered_reviews"
-	LEN_JOINERS      = 5
 )
 
 type ReviewMapperConfig struct {
 	ServerPort string
+	NumJoiners int
 }
 
 type ReviewMapper struct {
@@ -153,7 +153,7 @@ func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 		mappedReview := p.mapReview(review)
 		reviewBuffer := protocol.SerializeMappedReview(&mappedReview)
 
-		gameRange := utils.GetRange(review.AppID, LEN_JOINERS)
+		gameRange := utils.GetRange(review.AppID, p.config.NumJoiners)
 		err = p.sendReview(reviewBuffer, gameRange)
 		if err != nil {
 			log.Error("Error sending mapped review: %v", err)

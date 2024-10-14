@@ -29,6 +29,12 @@ func ConnectToMiddleware() (*Middleware, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	err = ch.Qos(1, 0, false)
+	if err != nil {
+		return nil, err
+	}
+
 	m := &Middleware{conn, ch, make(map[string]amqp.Queue)}
 	return m, nil
 }
@@ -43,7 +49,7 @@ func (m *Middleware) DeleteQueue(name string) error {
 	_, err := m.ch.QueueDelete(name, false, false, false)
 
 	return err
-} 
+}
 
 func (m *Middleware) DeclareDirectQueue(name string) (string, error) {
 	q, err := m.ch.QueueDeclare(
@@ -160,7 +166,7 @@ func (m *Middleware) ConsumeAndProcess(queueName string, processFunction func([]
 		err := processFunction(d.Body, &finished)
 		if err != nil {
 			log.Errorf("Error processing message: %s", err)
-			err := d.Nack(false, true) 
+			err := d.Nack(false, true)
 			if err != nil {
 				log.Errorf("Error Nacknowledging rabbitmq message: %s", err)
 			}

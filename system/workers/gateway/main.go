@@ -22,6 +22,7 @@ func InitConfig() (*viper.Viper, error) {
 	v.BindEnv("server", "port")
 	v.BindEnv("log", "level")
 	v.BindEnv("counters")
+	v.BindEnv("mappers")
 
 	return v, nil
 }
@@ -45,10 +46,11 @@ func InitLogger(logLevel string) error {
 }
 
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | num_counters: %d",
+	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | num_counters: %d | num_mappers: %d",
 		v.GetString("server.port"),
 		v.GetString("log.level"),
 		v.GetInt("counters"),
+		v.GetInt("mappers"),
 	)
 }
 
@@ -67,6 +69,7 @@ func main() {
 	config := common.ServerConfig{
 		ServerPort:  v.GetString("server.port"),
 		NumCounters: v.GetInt("counters"),
+		NumMappers: v.GetInt("mappers"),
 	}
 	server, err := common.NewServer(config)
 

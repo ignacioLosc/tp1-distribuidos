@@ -22,11 +22,11 @@ var log = logging.MustGetLogger("log")
 const (
 	games_to_filter = "games_to_filter"
 	filtered_games  = "filtered_games"
-	LEN_JOINERS     = 5
 )
 
 type GenreFilterConfig struct {
 	ServerPort string
+	NumJoiners int
 }
 
 type GenreFilter struct {
@@ -107,7 +107,7 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 	}
 
 	decade := strconv.Itoa(year - (year % 10))
-	appIdRange := strconv.Itoa(utils.GetRange(game.AppID, LEN_JOINERS))
+	appIdRange := strconv.Itoa(utils.GetRange(game.AppID, p.config.NumJoiners))
 
 	if strings.Contains(game.Genres, "Indie") {
 		t := fmt.Sprintf("indie.%s.%s", decade, appIdRange)

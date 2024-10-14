@@ -21,6 +21,7 @@ func InitConfig() (*viper.Viper, error) {
 
 	v.BindEnv("server", "port")
 	v.BindEnv("log", "level")
+	v.BindEnv("joiners")
 
 	return v, nil
 }
@@ -44,9 +45,10 @@ func InitLogger(logLevel string) error {
 }
 
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s",
+	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | num_joiners: %d",
 		v.GetString("server.port"),
 		v.GetString("log.level"),
+		v.GetInt("joiners"),
 	)
 }
 
@@ -62,8 +64,9 @@ func main() {
 
 	PrintConfig(v)
 
-	config := common.ReviewMapperConfig{
+	config := common.ReviewMapperConfig {
 		ServerPort: v.GetString("server.port"),
+		NumJoiners: v.GetInt("joiners"),
 	}
 	reviewMapper, err := common.NewReviewMapper(config)
 

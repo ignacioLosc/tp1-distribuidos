@@ -45,7 +45,7 @@ func InitLogger(logLevel string) error {
 }
 
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | amount_joiners: %s",
+	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | amount_joiners: %d",
 		v.GetString("server.port"),
 		v.GetString("log.level"),
 		v.GetInt("joiners"),

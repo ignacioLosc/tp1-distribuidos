@@ -153,7 +153,7 @@ func (p *Aggregator) saveGame(game prot.GameReviewCount, top int) error {
 
 func (p *Aggregator) aggregateGames(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
-		log.Info("Received EOF %s")
+		log.Info("Received EOF")
 		p.finishedCount++
 		top, err := strconv.Atoi(p.config.Top)
 		if err != nil {

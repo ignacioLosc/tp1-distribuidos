@@ -18,8 +18,9 @@ import (
 var log = logging.MustGetLogger("log")
 
 type ServerConfig struct {
-	ServerPort string
+	ServerPort  string
 	NumCounters int
+	NumMappers  int
 }
 
 type Server struct {
@@ -276,12 +277,20 @@ func (s *Server) listenOnChannels(ctx context.Context) {
 		case games := <-s.gamesChan:
 			s.middleware.PublishInQueue("games_to_filter", games)
 			if string(games) == "EOF" {
-				s.middleware.PublishInExchange("end_of_games", "", []byte("EOF"))
+				for i := 0; i < s.config.NumCounters; i++ {
+					s.middleware.PublishInQueue("games_to_count", []byte("EOF"))
+				}
 			} else {
 				s.middleware.PublishInQueue("games_to_count", games)
 			}
 		case review := <-s.reviewsChan:
-			s.middleware.PublishInQueue("reviews", review)
+			if string(review) == "EOF" {
+				for i := 0; i < s.config.NumMappers; i++ {
+					s.middleware.PublishInQueue("reviews", []byte("EOF"))
+				}
+			} else {
+				s.middleware.PublishInQueue("reviews", review)
+			}
 		}
 	}
 }
