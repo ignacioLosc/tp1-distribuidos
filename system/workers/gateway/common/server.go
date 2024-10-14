@@ -8,7 +8,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"example.com/system/communication/middleware"
 	mw "example.com/system/communication/middleware"
 	"example.com/system/communication/protocol"
 	"example.com/system/communication/utils"
@@ -18,7 +20,7 @@ import (
 var log = logging.MustGetLogger("log")
 
 type ServerConfig struct {
-	ServerPort string
+	ServerPort  string
 	NumCounters int
 }
 
@@ -91,23 +93,23 @@ func middlewareGatewayInit() (*mw.Middleware, error) {
 }
 
 func (s *Server) receiveMessage(conn net.Conn, channel chan []byte, ctx context.Context) error {
+	resultChan := make(chan utils.StringResult)
 	for {
+		go utils.DeserealizeString(conn, resultChan)
 		select {
 		case <-ctx.Done():
 			log.Infof("action: [receive] | result: fail | err: context cancelled")
 			return nil
-		default:
-			message, err := utils.DeserealizeString(conn)
-			if err != nil {
-				return err
+		case result := <-resultChan:
+			if result.Error != nil {
+				return result.Error
 			}
 
-			channel <- message
+			channel <- result.Message
 
-			if string(message) == "EOF" {
+			if string(result.Message) == "EOF" {
 				return nil
 			}
-			continue
 		}
 	}
 }
@@ -163,87 +165,114 @@ func formatGameNames(stringResult string, gameNames []string) string {
 	return stringResult
 }
 
-func (s *Server) waitForResults(conn net.Conn) {
-	returnResultsCallback := func(msg []byte, routingKey string, x *bool) error {
-		stringResult := ""
-		switch routingKey {
-		case "query1":
-			counter, err := protocol.DeserializeCounter(msg)
-			if err != nil {
-				return fmt.Errorf("failed to deserialize counter: %w.", err)
+func (s *Server) waitForResults(conn net.Conn, ctx context.Context) error {
+	msgChan := make(chan middleware.MsgResponse)
+	go s.middleware.ConsumeExchange2("query_results", msgChan)
+	for {
+		select {
+		case <-ctx.Done():
+			log.Infof("waitForResults returning")
+			return nil
+
+		case result := <-msgChan:
+			stringResult := ""
+			msg := result.Msg.Body
+			switch result.Msg.RoutingKey {
+			case "query1":
+				counter, err := protocol.DeserializeCounter(msg)
+				if err != nil {
+					return fmt.Errorf("failed to deserialize counter: %w.", err)
+				}
+				log.Info("Received results for query 1", counter)
+				stringResult = fmt.Sprintf("QUERY 1 RESULTS: Windows: %d, Linux: %d, Mac: %d", counter.Windows, counter.Linux, counter.Mac)
+				break
+			case "query2":
+				log.Info("Received results for query 2")
+				gameNames := getGameNames(msg)
+				stringResult = fmt.Sprintf("QUERY 2 RESULTS: ")
+				stringResult = formatGameNames(stringResult, gameNames)
+				break
+			case "query3":
+				log.Info("Received results for query 3")
+				gameNames := getGameReviewCountNames(msg)
+				stringResult = fmt.Sprintf("QUERY 3 RESULTS: ")
+				stringResult = formatGameNames(stringResult, gameNames)
+				break
+			case "query4":
+				log.Info("Received results for query 4")
+				gameNames := getGameReviewCountNames(msg)
+				stringResult = fmt.Sprintf("QUERY 4 RESULTS: ")
+				stringResult = formatGameNames(stringResult, gameNames)
+				break
+			case "query5":
+				log.Info("Received results for query 5")
+				gameNames := getGameReviewCountNames(msg)
+				stringResult = fmt.Sprintf("QUERY 5 RESULTS: ")
+				stringResult = formatGameNames(stringResult, gameNames)
+				break
+			default:
+				log.Errorf("invalid routing key")
 			}
-			log.Info("Received results for query 1", counter)
-			stringResult = fmt.Sprintf("QUERY 1 RESULTS: Windows: %d, Linux: %d, Mac: %d", counter.Windows, counter.Linux, counter.Mac)
-			break
-		case "query2":
-			log.Info("Received results for query 2")
-			gameNames := getGameNames(msg)
-			stringResult = fmt.Sprintf("QUERY 2 RESULTS: ")
-			stringResult = formatGameNames(stringResult, gameNames)
-			break
-		case "query3":
-			log.Info("Received results for query 3")
-			gameNames := getGameReviewCountNames(msg)
-			stringResult = fmt.Sprintf("QUERY 3 RESULTS: ")
-			stringResult = formatGameNames(stringResult, gameNames)
-			break
-		case "query4":
-			log.Info("Received results for query 4")
-			gameNames := getGameReviewCountNames(msg)
-			stringResult = fmt.Sprintf("QUERY 4 RESULTS: ")
-			stringResult = formatGameNames(stringResult, gameNames)
-			break
-		case "query5":
-			log.Info("Received results for query 5")
-			gameNames := getGameReviewCountNames(msg)
-			stringResult = fmt.Sprintf("QUERY 5 RESULTS: ")
-			stringResult = formatGameNames(stringResult, gameNames)
-			break
-		default:
-			log.Errorf("invalid routing key")
-		}
 
-		data, err := utils.SerializeString(stringResult)
-		if err != nil {
-			return fmt.Errorf("failed to serialize data: %w.", err)
-		}
+			data, err := utils.SerializeString(stringResult)
+			if err != nil {
+				return fmt.Errorf("failed to serialize data: %w.", err)
+			}
 
-		err = utils.SendAll(conn, data)
-		if err != nil {
-			return fmt.Errorf("failed to write data: %w.", err)
-		}
+			err = utils.SendAll(conn, data)
+			if err != nil {
+				return fmt.Errorf("failed to write data: %w.", err)
+			}
 
-		return nil
+			return nil
+		}
 	}
+}
 
-	s.middleware.ConsumeExchange("query_results", returnResultsCallback)
+type NetConnResponse struct {
+	Conn  net.Conn
+	Error error
 }
 
 func (s *Server) Start() {
 	defer s.listener.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	stop := make(chan bool)
 
 	go func() {
 		chSignal := make(chan os.Signal, 1)
 		signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 		<-chSignal
-		stop <- true
+		log.Infof("received signal")
 		cancel()
 	}()
 
 	go s.listenOnChannels(ctx)
 
-	for {
-		conn, err := s.listener.Accept()
-		if err != nil {
-			log.Errorf("Error accepting connection: %v", err)
-			continue
+	connectionChan := make(chan NetConnResponse, 1)
+	go func() {
+		for {
+			conn, err := s.listener.Accept()
+			if err != nil {
+				log.Errorf("Error accepting connection: %v", err)
+				break
+			}
+			connectionChan <- NetConnResponse{conn, err}
 		}
+	}()
 
-		go s.receiveDatasets(conn, ctx)
-		s.waitForResults(conn)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case connectionResult := <-connectionChan:
+			go s.receiveDatasets(connectionResult.Conn, ctx)
+			connectionResult.Error = s.waitForResults(connectionResult.Conn, ctx)
+			if connectionResult.Error != nil {
+				log.Errorf("Error while receiving results: %v", connectionResult.Error)
+				continue
+			}
+		}
 	}
 }
 
@@ -270,8 +299,11 @@ func (s *Server) receiveDatasets(conn net.Conn, ctx context.Context) {
 
 func (s *Server) listenOnChannels(ctx context.Context) {
 	for {
+		time.Sleep(time.Second)
+		log.Infof("sleeping")
 		select {
 		case <-ctx.Done():
+			log.Infof("listenOnChannels returning")
 			return
 		case games := <-s.gamesChan:
 			s.middleware.PublishInQueue("games_to_filter", games)

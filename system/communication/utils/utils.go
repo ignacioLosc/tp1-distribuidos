@@ -25,34 +25,42 @@ func SendAll(sock net.Conn, buf []byte) error {
 }
 
 func RecvAll(sock net.Conn, sz int) ([]byte, error) {
-    buf := make([]byte, sz)
-    totalRead := 0
+	buf := make([]byte, sz)
+	totalRead := 0
 
-    for totalRead < sz {
-        n, err := sock.Read(buf[totalRead:])
-        if err != nil {
-            if err == io.EOF {
-                return buf[:totalRead], nil 
-            }
-            return nil, err
-        }
-        totalRead += n
-    }
-    return buf, nil
+	for totalRead < sz {
+		n, err := sock.Read(buf[totalRead:])
+		if err != nil {
+			if err == io.EOF {
+				return buf[:totalRead], nil
+			}
+			return nil, err
+		}
+		totalRead += n
+	}
+	return buf, nil
 }
 
-func DeserealizeString(conn net.Conn) ([]byte, error) {
+type StringResult struct {
+	Message []byte
+	Error   error
+}
+
+func DeserealizeString(conn net.Conn, resultChan chan StringResult) {
 	lenBuffer, err := RecvAll(conn, 8)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read len of data: %w.", err)
+		resultChan <- StringResult{nil, fmt.Errorf("failed to read len of data: %w.", err)}
+		return
 	}
 	lenData := binary.BigEndian.Uint64(lenBuffer)
 
 	data, err := RecvAll(conn, int(lenData))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read data: %w.", err)
+		resultChan <- StringResult{nil, fmt.Errorf("failed to read data: %w.", err)}
+		return
 	}
-	return data, nil
+	resultChan <- StringResult{data, nil}
+	return
 }
 
 func SerializeString(data string) ([]byte, error) {
