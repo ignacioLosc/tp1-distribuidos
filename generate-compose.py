@@ -17,7 +17,7 @@ def basic_service(worker, env: list = [], container_name=None, log_level=DEFAULT
         },
         'entrypoint': f'/app/{worker}',
         'environment': [f'CLI_LOG_LEVEL={log_level}'] + env,
-        'networks': [NETWORK_NAME]
+        # 'networks': [NETWORK_NAME]
     }
 
     if container_name:
@@ -25,8 +25,9 @@ def basic_service(worker, env: list = [], container_name=None, log_level=DEFAULT
     else:
         obj['container_name'] = worker
 
+    obj['depends_on'] = ['rabbitmq']
     if worker != 'gateway':
-        obj['depends_on'] = ['gateway']
+        obj['depends_on'].append('gateway')
 
     return obj
 
@@ -73,13 +74,25 @@ def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num
     services['platform_accumulator']['environment'].append(f'CLI_COUNTERS={num_counters}')
     services['gateway']['environment'].append(f'CLI_COUNTERS={num_counters}')
 
+    services['rabbitmq'] = {
+            'image': 'rabbitmq:3.9.16-management-alpine',
+            'container_name': 'rabbitmq',
+            'ports': ['5672:5672', '15672:15672'],
+            'environment': {
+                'RABBITMQ_DEFAULT_USER': 'guest',
+                'RABBITMQ_DEFAULT_PASS': 'guest'
+            },
+            # 'networks': [NETWORK_NAME],
+    }
+
+
     compose_data = {
         'name': 'steam-analyzer',
         'services': services,
         'networks': {
             NETWORK_NAME: {
-                'external': True,
-                'name': NETWORK_NAME
+                # 'external': True,
+                # 'name': NETWORK_NAME
             }
         }
     }

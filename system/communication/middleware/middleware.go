@@ -1,6 +1,9 @@
 package middleware
 
 import (
+	"math"
+	"time"
+
 	"github.com/op/go-logging"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -19,10 +22,28 @@ func (m *Middleware) Close() {
 	m.conn.Close()
 }
 
+func connectRabbitMQ(retries int) (*amqp.Connection, error) {
+	var conn *amqp.Connection
+	var err error
+
+	for i := 0; i < 5; i++ {
+		conn, err = amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
+		if err == nil {
+			break
+		}
+
+		delay := (5 + time.Duration(math.Pow(2, float64(i)))) * time.Second
+		log.Errorf("Retry %d/%d failed: %v. Retrying in %v...", i+1, retries, err, delay)
+		time.Sleep(delay)
+	}
+
+	return conn, err
+}
+
 func ConnectToMiddleware() (*Middleware, error) {
-	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
+	conn, err := connectRabbitMQ(5)
 	if err != nil {
-		return nil, err
+		log.Fatalf("action: [connection to rabbitmq] | msg: Could not establish connection: %v", err)
 	}
 
 	ch, err := conn.Channel()

@@ -181,7 +181,7 @@ func (j *Joiner) sendJoinedResults() {
 		log.Errorf("Error publishing game review count to shooter negative joined queue: %s", err)
 	}
 
-	err = j.middleware.PublishInQueue(shooter_positive_joined_queue,[]byte("EOF")) 
+	err = j.middleware.PublishInQueue(shooter_positive_joined_queue,[]byte("EOF"))
 	if err != nil {
 		log.Errorf("Error publishing game review count to shooter positive joined queue: %s", err)
 	}
