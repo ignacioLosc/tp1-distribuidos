@@ -14,13 +14,15 @@ import (
 var log = logging.MustGetLogger("log")
 
 type Middleware struct {
-	conn   *amqp.Connection
-	ch     *amqp.Channel
-	queues map[string]amqp.Queue
+	conn     *amqp.Connection
+	channels map[string]*amqp.Channel
+	queues   map[string]amqp.Queue
 }
 
 func (m *Middleware) Close() {
-	m.ch.Close()
+	for _, ch := range m.channels {
+		ch.Close()
+	}
 	m.conn.Close()
 }
 
@@ -42,40 +44,49 @@ func connectRabbitMQ(retries int) (*amqp.Connection, error) {
 	return conn, err
 }
 
-func ConnectToMiddleware() (*Middleware, error) {
+func CreateMiddleware() (*Middleware, error) {
 	conn, err := connectRabbitMQ(5)
 	if err != nil {
 		log.Fatalf("action: [connection to rabbitmq] | msg: Could not establish connection: %v", err)
 	}
+	return &Middleware{conn, make(map[string]*amqp.Channel), make(map[string]amqp.Queue)}, nil
+}
 
-	ch, err := conn.Channel()
+func (m *Middleware) DeclareChannel(channelName string) error {
+	ch, err := m.conn.Channel()
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("Error declaring channel: %s", err)
 	}
 
 	err = ch.Qos(1, 0, false)
 	if err != nil {
-		return nil, err
+		log.Fatalf("Error setting QoS: %s", err)
+		return err
 	}
 
-	m := &Middleware{conn, ch, make(map[string]amqp.Queue)}
-	return m, nil
+	m.channels[channelName] = ch
+	return nil
 }
 
-func (m *Middleware) DeleteQueue(name string) error {
+func (m *Middleware) DeleteQueue(channelName string, name string) error {
 	_, ok := m.queues[name]
 	if !ok {
 		return nil
 	}
 
 	m.queues[name] = amqp.Queue{}
-	_, err := m.ch.QueueDelete(name, false, false, false)
+	_, err := m.channels[channelName].QueueDelete(name, false, false, false)
 
 	return err
 }
 
-func (m *Middleware) DeclareDirectQueue(name string) (string, error) {
-	q, err := m.ch.QueueDeclare(
+func (m *Middleware) DeclareDirectQueue(channelName string, name string) (string, error) {
+	ch, ok := m.channels[channelName]
+	if !ok {
+		return "", fmt.Errorf("Channel %s not found", channelName)
+	}
+
+	q, err := ch.QueueDeclare(
 		name,  // name
 		true,  // durable
 		false, // delete when unused
@@ -92,8 +103,13 @@ func (m *Middleware) DeclareDirectQueue(name string) (string, error) {
 	return q.Name, nil
 }
 
-func (m *Middleware) DeclareTemporaryQueue() (string, error) {
-	q, err := m.ch.QueueDeclare(
+func (m *Middleware) DeclareTemporaryQueue(channelName string) (string, error) {
+	ch, ok := m.channels[channelName]
+	if !ok {
+		return "", fmt.Errorf("Channel %s not found", channelName)
+	}
+
+	q, err := ch.QueueDeclare(
 		"",    // name
 		false, // durable
 		false, // delete when unused
@@ -110,8 +126,13 @@ func (m *Middleware) DeclareTemporaryQueue() (string, error) {
 	return q.Name, nil
 }
 
-func (m *Middleware) DeclareExchange(name string, exchangeType string) error {
-	return m.ch.ExchangeDeclare(
+func (m *Middleware) DeclareExchange(channelName string, name string, exchangeType string) error {
+	ch, ok := m.channels[channelName]
+	if !ok {
+		return fmt.Errorf("Channel %s not found", channelName)
+	}
+
+	return ch.ExchangeDeclare(
 		name,         // name
 		exchangeType, // type
 		true,         // durable
@@ -122,8 +143,13 @@ func (m *Middleware) DeclareExchange(name string, exchangeType string) error {
 	)
 }
 
-func (m *Middleware) BindQueueToExchange(exchangeName string, queueName string, routingKey string) error {
-	return m.ch.QueueBind(
+func (m *Middleware) BindQueueToExchange(channelName string, exchangeName string, queueName string, routingKey string) error {
+	ch, ok := m.channels[channelName]
+	if !ok {
+		return fmt.Errorf("Channel %s not found", channelName)
+	}
+
+	return ch.QueueBind(
 		queueName,    // queue name
 		routingKey,   // routing key
 		exchangeName, // exchange
@@ -132,8 +158,13 @@ func (m *Middleware) BindQueueToExchange(exchangeName string, queueName string, 
 	)
 }
 
-func (m *Middleware) PublishInExchange(exchangeName string, routingKey string, message []byte) error {
-	return m.ch.Publish(
+func (m *Middleware) PublishInExchange(channelName string, exchangeName string, routingKey string, message []byte) error {
+	ch, ok := m.channels[channelName]
+	if !ok {
+		return fmt.Errorf("Channel %s not found", channelName)
+	}
+
+	return ch.Publish(
 		exchangeName, // exchange
 		routingKey,   // routing key
 		false,        // mandatory
@@ -144,8 +175,13 @@ func (m *Middleware) PublishInExchange(exchangeName string, routingKey string, m
 		})
 }
 
-func (m *Middleware) PublishInQueue(queueName string, message []byte) error {
-	err := m.ch.Publish(
+func (m *Middleware) PublishInQueue(channelName string, queueName string, message []byte) error {
+	ch, ok := m.channels[channelName]
+	if !ok {
+		return fmt.Errorf("Channel %s not found", channelName)
+	}
+
+	err := ch.Publish(
 		"",        // exchange
 		queueName, // routing key
 		false,     // mandatory
@@ -162,8 +198,13 @@ func (m *Middleware) PublishInQueue(queueName string, message []byte) error {
 	return nil
 }
 
-func (m *Middleware) ConsumeAndProcess(queueName string, processFunction func([]byte, *bool) error) {
-	msgs, err := m.ch.Consume(
+func (m *Middleware) ConsumeAndProcess(channelName string, queueName string, processFunction func([]byte, *bool) error) {
+	ch, ok := m.channels[channelName]
+	if !ok {
+		return
+	}
+
+	msgs, err := ch.Consume(
 		queueName, // queue
 		"",        // consumer
 		false,     // auto-ack
@@ -209,8 +250,13 @@ func (m *Middleware) ConsumeAndProcess(queueName string, processFunction func([]
 	}
 }
 
-func (m *Middleware) ConsumeMultipleAndProcess(queueName1 string, queueName2 string, processFunction1 func([]byte, *bool) error, processFunction2 func([]byte, *bool) error) {
-	msgs1, err := m.ch.Consume(
+func (m *Middleware) ConsumeMultipleAndProcess(channelName string, queueName1 string, queueName2 string, processFunction1 func([]byte, *bool) error, processFunction2 func([]byte, *bool) error) {
+	ch, ok := m.channels[channelName]
+	if !ok {
+		return
+	}
+
+	msgs1, err := ch.Consume(
 		queueName1, // queue
 		"",         // consumer
 		false,      // auto-ack
@@ -224,7 +270,7 @@ func (m *Middleware) ConsumeMultipleAndProcess(queueName1 string, queueName2 str
 		return
 	}
 
-	msgs2, err := m.ch.Consume(
+	msgs2, err := ch.Consume(
 		queueName2, // queue
 		"",         // consumer
 		false,      // auto-ack
@@ -290,8 +336,13 @@ func (m *Middleware) ConsumeMultipleAndProcess(queueName1 string, queueName2 str
 	}
 }
 
-func (m *Middleware) ConsumeExchange(queueName string, processFunction func([]byte, string, *bool) error) {
-	msgs, err := m.ch.Consume(
+func (m *Middleware) ConsumeExchange(channelName string, queueName string, processFunction func([]byte, string, *bool) error) {
+	ch, ok := m.channels[channelName]
+	if !ok {
+		return
+	}
+
+	msgs, err := ch.Consume(
 		queueName, // queue
 		"",        // consumer
 		false,     // auto-ack
@@ -331,8 +382,13 @@ type MsgResponse struct {
 	MsgError error
 }
 
-func (m *Middleware) ConsumeExchange2(queueName string, msgChan chan MsgResponse) {
-	msgs, err := m.ch.Consume(
+func (m *Middleware) ConsumeExchange2(channelName string, queueName string, msgChan chan MsgResponse) {
+	ch, ok := m.channels[channelName]
+	if !ok {
+		return
+	}
+
+	msgs, err := ch.Consume(
 		queueName, // queue
 		"",        // consumer
 		false,     // auto-ack

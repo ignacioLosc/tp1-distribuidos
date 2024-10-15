@@ -8,13 +8,20 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"example.com/system/communication/middleware"
 	mw "example.com/system/communication/middleware"
 	"example.com/system/communication/protocol"
 	"example.com/system/communication/utils"
 	"github.com/op/go-logging"
+)
+
+const (
+	control       = "control"
+	communication = "communication"
+
+	games_to_count = "games_to_count"
+	games_to_filter = "games_to_filter"
 )
 
 var log = logging.MustGetLogger("log")
@@ -72,23 +79,34 @@ func (s *Server) Close() {
 }
 
 func middlewareGatewayInit() (*mw.Middleware, error) {
-	middleware, err := mw.ConnectToMiddleware()
+	middleware, err := mw.CreateMiddleware()
 	if err != nil {
 		return nil, err
 	}
-	middleware.DeclareDirectQueue("games_to_count")
-	middleware.DeclareDirectQueue("games_to_filter")
-	middleware.DeclareDirectQueue("reviews")
 
-	middleware.DeclareExchange("results", "direct")
-	middleware.DeclareExchange("end_of_games", "fanout")
-	middleware.DeclareDirectQueue("query_results")
+	err = middleware.DeclareChannel(communication)
+	if err != nil {
+		return nil, err
+	}
 
-	middleware.BindQueueToExchange("results", "query_results", "query1")
-	middleware.BindQueueToExchange("results", "query_results", "query2")
-	middleware.BindQueueToExchange("results", "query_results", "query3")
-	middleware.BindQueueToExchange("results", "query_results", "query4")
-	middleware.BindQueueToExchange("results", "query_results", "query5")
+	err = middleware.DeclareChannel(control)
+	if err != nil {
+		return nil, err
+	}
+
+	middleware.DeclareDirectQueue(communication, games_to_count)
+	middleware.DeclareDirectQueue(communication, games_to_filter)
+	middleware.DeclareDirectQueue(communication, "reviews")
+
+	middleware.DeclareExchange(communication, "results", "direct")
+	middleware.DeclareExchange(communication, "end_of_games", "fanout")
+	middleware.DeclareDirectQueue(communication, "query_results")
+
+	middleware.BindQueueToExchange(communication, "results", "query_results", "query1")
+	middleware.BindQueueToExchange(communication, "results", "query_results", "query2")
+	middleware.BindQueueToExchange(communication, "results", "query_results", "query3")
+	middleware.BindQueueToExchange(communication, "results", "query_results", "query4")
+	middleware.BindQueueToExchange(communication, "results", "query_results", "query5")
 
 	return middleware, nil
 }
@@ -168,7 +186,7 @@ func formatGameNames(stringResult string, gameNames []string) string {
 
 func (s *Server) waitForResults(conn net.Conn, ctx context.Context) error {
 	msgChan := make(chan middleware.MsgResponse)
-	go s.middleware.ConsumeExchange2("query_results", msgChan)
+	go s.middleware.ConsumeExchange2(communication, "query_results", msgChan)
 	for {
 		select {
 		case <-ctx.Done():
@@ -300,28 +318,25 @@ func (s *Server) receiveDatasets(conn net.Conn, ctx context.Context) {
 
 func (s *Server) listenOnChannels(ctx context.Context) {
 	for {
-		time.Sleep(time.Second)
-		log.Infof("sleeping")
 		select {
 		case <-ctx.Done():
-			log.Infof("listenOnChannels returning")
 			return
 		case games := <-s.gamesChan:
-			s.middleware.PublishInQueue("games_to_filter", games)
+			s.middleware.PublishInQueue(communication, "games_to_filter", games)
 			if string(games) == "EOF" {
 				for i := 0; i < s.config.NumCounters; i++ {
-					s.middleware.PublishInQueue("games_to_count", []byte("EOF"))
+					s.middleware.PublishInQueue(communication, "games_to_count", []byte("EOF"))
 				}
 			} else {
-				s.middleware.PublishInQueue("games_to_count", games)
+				s.middleware.PublishInQueue(communication, "games_to_count", games)
 			}
 		case review := <-s.reviewsChan:
 			if string(review) == "EOF" {
 				for i := 0; i < s.config.NumMappers; i++ {
-					s.middleware.PublishInQueue("reviews", []byte("EOF"))
+					s.middleware.PublishInQueue(communication, "reviews", []byte("EOF"))
 				}
 			} else {
-				s.middleware.PublishInQueue("reviews", review)
+				s.middleware.PublishInQueue(communication, "reviews", review)
 			}
 		}
 	}

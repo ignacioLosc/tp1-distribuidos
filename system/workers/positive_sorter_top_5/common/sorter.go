@@ -20,6 +20,8 @@ var log = logging.MustGetLogger("log")
 const (
 	joined_reviews_indies = "joined_reviews_indies"
 	top_5_partial_results = "top_5_partial_results"
+	control       = "control"
+	communication = "communication"
 )
 
 type SorterConfig struct {
@@ -36,7 +38,7 @@ type Sorter struct {
 }
 
 func NewSorter(config SorterConfig) (*Sorter, error) {
-	middleware, err := middleware.ConnectToMiddleware()
+	middleware, err := middleware.CreateMiddleware()
 	if err != nil {
 		log.Infof("Error connecting to middleware")
 		return nil, err
@@ -56,13 +58,24 @@ func NewSorter(config SorterConfig) (*Sorter, error) {
 }
 
 func (c *Sorter) middlewareInit() error {
-	_, err := c.middleware.DeclareDirectQueue(joined_reviews_indies)
+	err := c.middleware.DeclareChannel(communication)
+	if err != nil {
+		return err
+	}
+
+	err = c.middleware.DeclareChannel(control)
+	if err != nil {
+		return err
+	}
+
+
+	_, err = c.middleware.DeclareDirectQueue(communication, joined_reviews_indies)
 	if err != nil {
 		log.Errorf("Error declaring joined_reviews_indies queue")
 		return err
 	}
 
-	_, err = c.middleware.DeclareDirectQueue(top_5_partial_results)
+	_, err = c.middleware.DeclareDirectQueue(communication, top_5_partial_results)
 	if err != nil {
 		log.Errorf("Error declaring top_5_partial_results queue")
 		return err
@@ -96,7 +109,7 @@ func (p *Sorter) Start() {
 			log.Info("Received sigterm")
 			return
 		default:
-			p.middleware.ConsumeAndProcess(joined_reviews_indies, p.sortGames)
+			p.middleware.ConsumeAndProcess(communication, joined_reviews_indies, p.sortGames)
 			p.sendResults()
 		}
 
@@ -122,8 +135,8 @@ func (p *Sorter) sendResults() {
 		gameBuffer := protocol.SerializeGameReviewCount(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
-	p.middleware.PublishInQueue(top_5_partial_results, gamesBuffer)
-	p.middleware.PublishInQueue(top_5_partial_results, []byte("EOF"))
+	p.middleware.PublishInQueue(communication, top_5_partial_results, gamesBuffer)
+	p.middleware.PublishInQueue(communication, top_5_partial_results, []byte("EOF"))
 }
 
 func (p *Sorter) shouldKeep(game prot.GameReviewCount, sortBy string, top int) (bool, error) {

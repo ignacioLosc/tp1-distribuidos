@@ -20,6 +20,8 @@ var log = logging.MustGetLogger("log")
 const (
 	reviews          = "reviews"
 	filtered_reviews = "filtered_reviews"
+	control       = "control"
+	communication = "communication"
 )
 
 type ReviewMapperConfig struct {
@@ -35,7 +37,7 @@ type ReviewMapper struct {
 }
 
 func NewReviewMapper(config ReviewMapperConfig) (*ReviewMapper, error) {
-	middleware, err := mw.ConnectToMiddleware()
+	middleware, err := mw.CreateMiddleware()
 	if err != nil {
 		return nil, err
 	}
@@ -66,12 +68,22 @@ func NewReviewMapper(config ReviewMapperConfig) (*ReviewMapper, error) {
 }
 
 func (p ReviewMapper) middlewareCounterInit() error {
-	_, err := p.middleware.DeclareDirectQueue(reviews)
+	err := p.middleware.DeclareChannel(communication)
 	if err != nil {
 		return err
 	}
 
-	err = p.middleware.DeclareExchange(filtered_reviews, "direct")
+	err = p.middleware.DeclareChannel(control)
+	if err != nil {
+		return err
+	}
+
+	_, err = p.middleware.DeclareDirectQueue(communication, reviews)
+	if err != nil {
+		return err
+	}
+
+	err = p.middleware.DeclareExchange(communication, filtered_reviews, "direct")
 	if err != nil {
 		return err
 	}
@@ -102,18 +114,18 @@ func (p *ReviewMapper) Start() {
 			p.stop <- true
 			return
 		default:
-			p.middleware.ConsumeAndProcess(reviews, p.mapReviews)
+			p.middleware.ConsumeAndProcess(communication, reviews, p.mapReviews)
 		}
 	}
 }
 
 func (p *ReviewMapper) sendEOF() error {
 	log.Info("Sending EOF IN REVIEW MAPPER")
-	err := p.middleware.PublishInExchange(filtered_reviews, "0", []byte("EOF"))
-	err = p.middleware.PublishInExchange(filtered_reviews, "1", []byte("EOF"))
-	err = p.middleware.PublishInExchange(filtered_reviews, "2", []byte("EOF"))
-	err = p.middleware.PublishInExchange(filtered_reviews, "3", []byte("EOF"))
-	err = p.middleware.PublishInExchange(filtered_reviews, "4", []byte("EOF"))
+	err := p.middleware.PublishInExchange(communication, filtered_reviews, "0", []byte("EOF"))
+	err = p.middleware.PublishInExchange(communication, filtered_reviews, "1", []byte("EOF"))
+	err = p.middleware.PublishInExchange(communication, filtered_reviews, "2", []byte("EOF"))
+	err = p.middleware.PublishInExchange(communication, filtered_reviews, "3", []byte("EOF"))
+	err = p.middleware.PublishInExchange(communication, filtered_reviews, "4", []byte("EOF"))
 	if err != nil {
 		log.Info("Error: Couldn't send EOF")
 		return err
@@ -167,7 +179,7 @@ func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
 }
 
 func (p *ReviewMapper) sendReview(review []byte, gameRange int) error {
-	err := p.middleware.PublishInExchange(filtered_reviews, strconv.Itoa(gameRange), review)
+	err := p.middleware.PublishInExchange(communication, filtered_reviews, strconv.Itoa(gameRange), review)
 	if err != nil {
 		log.Error("Error sending mapped review: %v", err)
 		return err

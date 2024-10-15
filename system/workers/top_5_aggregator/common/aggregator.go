@@ -21,6 +21,8 @@ const (
 	top_5_partial_results = "top_5_partial_results"
 	query_key             = "query3"
 	results_exchange      = "results"
+	control       = "control"
+	communication = "communication"
 )
 
 type AggregatorConfig struct {
@@ -38,7 +40,7 @@ type Aggregator struct {
 }
 
 func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
-	middleware, err := middleware.ConnectToMiddleware()
+	middleware, err := middleware.CreateMiddleware()
 	if err != nil {
 		log.Infof("Error connecting to middleware")
 		return nil, err
@@ -59,13 +61,24 @@ func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
 }
 
 func (c *Aggregator) middlewareInit() error {
-	err := c.middleware.DeclareExchange(results_exchange, "direct")
+	err := c.middleware.DeclareChannel(communication)
+	if err != nil {
+		return err
+	}
+
+	err = c.middleware.DeclareChannel(control)
+	if err != nil {
+		return err
+	}
+
+
+	err = c.middleware.DeclareExchange(communication, results_exchange, "direct")
 	if err != nil {
 		log.Errorf("Error declaring results exchange")
 		return err
 	}
 
-	_, err = c.middleware.DeclareDirectQueue(top_5_partial_results)
+	_, err = c.middleware.DeclareDirectQueue(communication, top_5_partial_results)
 	if err != nil {
 		log.Errorf("Error declaring top_5_partial_results queue")
 		return err
@@ -99,7 +112,7 @@ func (p *Aggregator) Start() {
 			log.Info("Received sigterm")
 			return
 		default:
-			p.middleware.ConsumeAndProcess(top_5_partial_results, p.aggregateGames)
+			p.middleware.ConsumeAndProcess(communication, top_5_partial_results, p.aggregateGames)
 			p.sendResults()
 		}
 
@@ -125,7 +138,7 @@ func (p *Aggregator) sendResults() {
 		gameBuffer := protocol.SerializeGameReviewCount(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
-	p.middleware.PublishInExchange(results_exchange, query_key, gamesBuffer)
+	p.middleware.PublishInExchange(communication, results_exchange, query_key, gamesBuffer)
 }
 
 func (p *Aggregator) shouldKeep(game prot.GameReviewCount, top int) (bool, error) {
