@@ -37,7 +37,8 @@ type PercentileCalculator struct {
 }
 
 func NewPercentileCalculator(config PercentileCalculatorConfig) (*PercentileCalculator, error) {
-	middleware, err := middleware.ConnectToMiddleware()
+	ctx, cancel := context.WithCancel(context.Background())
+	middleware, err := middleware.ConnectToMiddleware(ctx, cancel)
 	if err != nil {
 		log.Infof("Error connecting to middleware")
 		return nil, err
@@ -77,30 +78,31 @@ func (c *PercentileCalculator) Close() {
 	c.middleware.Close()
 }
 
-func (c *PercentileCalculator) signalListener(cancel context.CancelFunc) {
+func (c *PercentileCalculator) signalListener() {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 	<-chSignal
-	cancel()
+	log.Infof("received signal")
+	c.middleware.CtxCancel()
 }
 
 func (p *PercentileCalculator) Start() {
 	log.Info("Starting game 5k reviews")
 	defer p.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	go p.signalListener()
 
-	go p.signalListener(cancel)
-
+	msgChan := make(chan middleware.MsgResponse)
+	p.middleware.ConsumeAndProcess(shooter_positive_joined_queue, msgChan)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.middleware.Ctx.Done():
 			log.Info("Received sigterm")
 			return
-		default:
-			p.middleware.ConsumeAndProcess(shooter_positive_joined_queue, p.accumulateGames)
-			p.calculatePercentile()
-			p.finished = 0
+		case result := <-msgChan:
+			msg := result.Msg.Body
+			result.Msg.Ack(false)
+			p.accumulateGames(msg)
 		}
 
 	}
@@ -135,12 +137,13 @@ func (p *PercentileCalculator) sendGames(games []protocol.GameReviewCount) {
 	p.middleware.PublishInExchange(results_exchange, query_key, gamesBuffer)
 }
 
-func (p *PercentileCalculator) accumulateGames(msg []byte, finished *bool) error {
+func (p *PercentileCalculator) accumulateGames(msg []byte) error {
 	if string(msg) == "EOF" {
 		log.Info("Received EOF")
 		p.finished++
 		if p.finished == p.config.NumJoiners {
-			*finished = true
+			p.calculatePercentile()
+			p.finished = 0
 		}
 		return nil
 	}

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -14,9 +15,11 @@ import (
 var log = logging.MustGetLogger("log")
 
 type Middleware struct {
-	conn   *amqp.Connection
-	ch     *amqp.Channel
-	queues map[string]amqp.Queue
+	conn      *amqp.Connection
+	ch        *amqp.Channel
+	queues    map[string]amqp.Queue
+	Ctx       context.Context
+	CtxCancel context.CancelFunc
 }
 
 func (m *Middleware) Close() {
@@ -42,7 +45,7 @@ func connectRabbitMQ(retries int) (*amqp.Connection, error) {
 	return conn, err
 }
 
-func ConnectToMiddleware() (*Middleware, error) {
+func ConnectToMiddleware(ctx context.Context, ctxCancel context.CancelFunc) (*Middleware, error) {
 	conn, err := connectRabbitMQ(5)
 	if err != nil {
 		log.Fatalf("action: [connection to rabbitmq] | msg: Could not establish connection: %v", err)
@@ -58,7 +61,7 @@ func ConnectToMiddleware() (*Middleware, error) {
 		return nil, err
 	}
 
-	m := &Middleware{conn, ch, make(map[string]amqp.Queue)}
+	m := &Middleware{conn, ch, make(map[string]amqp.Queue), ctx, ctxCancel}
 	return m, nil
 }
 
@@ -162,7 +165,7 @@ func (m *Middleware) PublishInQueue(queueName string, message []byte) error {
 	return nil
 }
 
-func (m *Middleware) ConsumeAndProcess(queueName string, processFunction func([]byte, *bool) error) {
+func (m *Middleware) ConsumeAndProcess(queueName string, msgChan chan MsgResponse) {
 	msgs, err := m.ch.Consume(
 		queueName, // queue
 		"",        // consumer
@@ -175,37 +178,18 @@ func (m *Middleware) ConsumeAndProcess(queueName string, processFunction func([]
 
 	if err != nil {
 		log.Errorf("Error consuming message: %s", err)
+		msgChan <- MsgResponse{amqp.Delivery{}, nil}
 		return
 	}
 
-	finished := false
-
-	for !finished {
+	for {
 		d, ok := <-msgs
 		if !ok {
+			d.Nack(false, false)
+			msgChan <- MsgResponse{amqp.Delivery{}, errors.New(fmt.Sprintf("There was an error consuming a message from the %s queue", queueName))}
 			return
 		}
-
-		err := processFunction(d.Body, &finished)
-		if err != nil {
-			log.Errorf("Error processing message: %s", err)
-			err := d.Nack(false, true)
-			if err != nil {
-				log.Errorf("Error Nacknowledging rabbitmq message: %s", err)
-			}
-			return
-		}
-
-		err = d.Ack(false)
-		if err != nil {
-			log.Errorf("Error acknowledging rabbitmq message: %s", err)
-			return
-		}
-
-		if finished {
-			log.Info("Finished processing")
-			return
-		}
+		msgChan <- MsgResponse{d, nil}
 	}
 }
 
@@ -290,48 +274,12 @@ func (m *Middleware) ConsumeMultipleAndProcess(queueName1 string, queueName2 str
 	}
 }
 
-func (m *Middleware) ConsumeExchange(queueName string, processFunction func([]byte, string, *bool) error) {
-	msgs, err := m.ch.Consume(
-		queueName, // queue
-		"",        // consumer
-		false,     // auto-ack
-		false,     // exclusive
-		false,     // no-local
-		false,     // no-wait
-		nil,       // args
-	)
-
-	if err != nil {
-		log.Errorf("Error consuming message: %s", err)
-		return
-	}
-
-	finished := false
-
-	for !finished {
-		d, ok := <-msgs
-		if !ok {
-			return
-		}
-		err := processFunction(d.Body, d.RoutingKey, &finished)
-		if err != nil {
-			log.Errorf("Error processing message: %s", err)
-			return
-		}
-		d.Ack(false)
-		if finished {
-			log.Info("Finished processing")
-			return
-		}
-	}
-}
-
 type MsgResponse struct {
 	Msg      amqp.Delivery
 	MsgError error
 }
 
-func (m *Middleware) ConsumeExchange2(queueName string, msgChan chan MsgResponse) {
+func (m *Middleware) ConsumeExchange(queueName string, msgChan chan MsgResponse) {
 	msgs, err := m.ch.Consume(
 		queueName, // queue
 		"",        // consumer
@@ -355,7 +303,6 @@ func (m *Middleware) ConsumeExchange2(queueName string, msgChan chan MsgResponse
 			msgChan <- MsgResponse{amqp.Delivery{}, errors.New(fmt.Sprintf("There was an error consuming a message from the %s queue", queueName))}
 			return
 		}
-		d.Ack(false) // mandar ack en MsgResponse
 		msgChan <- MsgResponse{d, nil}
 	}
 }

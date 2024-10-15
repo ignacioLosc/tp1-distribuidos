@@ -38,7 +38,8 @@ type Aggregator struct {
 }
 
 func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
-	middleware, err := middleware.ConnectToMiddleware()
+	ctx, cancel := context.WithCancel(context.Background())
+	middleware, err := middleware.ConnectToMiddleware(ctx, cancel)
 	if err != nil {
 		log.Infof("Error connecting to middleware")
 		return nil, err
@@ -78,29 +79,31 @@ func (c *Aggregator) Close() {
 	c.middleware.Close()
 }
 
-func (c *Aggregator) signalListener(cancel context.CancelFunc) {
+func (c *Aggregator) signalListener() {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 	<-chSignal
-	cancel()
+	log.Infof("received signal")
+	c.middleware.CtxCancel()
 }
 
 func (p *Aggregator) Start() {
 	log.Info("Starting game positiveReviewCount aggregator top 5")
 	defer p.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	go p.signalListener()
 
-	go p.signalListener(cancel)
-
+	msgChan := make(chan middleware.MsgResponse)
+	p.middleware.ConsumeAndProcess(top_5_partial_results, msgChan)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.middleware.Ctx.Done():
 			log.Info("Received sigterm")
 			return
-		default:
-			p.middleware.ConsumeAndProcess(top_5_partial_results, p.aggregateGames)
-			p.sendResults()
+		case result := <-msgChan:
+			msg := result.Msg.Body
+			result.Msg.Ack(false)
+			p.aggregateGames(msg)
 		}
 
 	}
@@ -151,7 +154,7 @@ func (p *Aggregator) saveGame(game prot.GameReviewCount, top int) error {
 	return nil
 }
 
-func (p *Aggregator) aggregateGames(msg []byte, finished *bool) error {
+func (p *Aggregator) aggregateGames(msg []byte) error {
 	if string(msg) == "EOF" {
 		log.Info("Received EOF")
 		p.finishedCount++
@@ -162,7 +165,7 @@ func (p *Aggregator) aggregateGames(msg []byte, finished *bool) error {
 		}
 
 		if p.finishedCount == top {
-			*finished = true
+			p.sendResults()
 		}
 
 		return nil

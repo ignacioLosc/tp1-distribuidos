@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"syscall"
 
+	"example.com/system/communication/middleware"
 	mw "example.com/system/communication/middleware"
 	"example.com/system/communication/protocol"
 	"example.com/system/communication/utils"
@@ -35,7 +36,8 @@ type ReviewMapper struct {
 }
 
 func NewReviewMapper(config ReviewMapperConfig) (*ReviewMapper, error) {
-	middleware, err := mw.ConnectToMiddleware()
+	ctx, cancel := context.WithCancel(context.Background())
+	middleware, err := mw.ConnectToMiddleware(ctx, cancel)
 	if err != nil {
 		return nil, err
 	}
@@ -82,27 +84,30 @@ func (p *ReviewMapper) Close() {
 	p.middleware.Close()
 }
 
-func (p *ReviewMapper) signalListener(cancel context.CancelFunc) {
+func (p *ReviewMapper) signalListener() {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 	<-chSignal
-	cancel()
+	log.Infof("received signal")
+	p.middleware.CtxCancel()
 }
 
 func (p *ReviewMapper) Start() {
 	defer p.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	go p.signalListener()
 
-	go p.signalListener(cancel)
-
+	msgChan := make(chan middleware.MsgResponse)
+	go p.middleware.ConsumeAndProcess(reviews, msgChan)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.middleware.Ctx.Done():
 			p.stop <- true
 			return
-		default:
-			p.middleware.ConsumeAndProcess(reviews, p.mapReviews)
+		case result := <-msgChan:
+			msg := result.Msg.Body
+			result.Msg.Ack(false)
+			p.mapReviews(msg)
 		}
 	}
 }
@@ -131,10 +136,9 @@ func (p *ReviewMapper) mapReview(review protocol.Review) protocol.MappedReview {
 	// return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: true}
 }
 
-func (p *ReviewMapper) mapReviews(msg []byte, finished *bool) error {
+func (p *ReviewMapper) mapReviews(msg []byte) error {
 	if string(msg) == "EOF" {
 		log.Info("Received EOF. Stopping")
-		*finished = true
 		p.sendEOF()
 		return nil
 	}

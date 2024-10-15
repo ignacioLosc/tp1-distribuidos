@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"example.com/system/communication/middleware"
 	mw "example.com/system/communication/middleware"
 	prot "example.com/system/communication/protocol"
 	"github.com/op/go-logging"
@@ -34,8 +35,8 @@ type PlatformAccumulator struct {
 }
 
 func NewPlatformAccumulator(config PlatformAccumulatorConfig) (*PlatformAccumulator, error) {
-
-	middleware, err := mw.ConnectToMiddleware()
+	ctx, cancel := context.WithCancel(context.Background())
+	middleware, err := mw.ConnectToMiddleware(ctx, cancel)
 	if err != nil {
 		return nil, err
 	}
@@ -80,41 +81,43 @@ func (p *PlatformAccumulator) Close() {
 	p.middleware.Close()
 }
 
-func (p *PlatformAccumulator) signalListener(cancel context.CancelFunc) {
+func (p *PlatformAccumulator) signalListener() {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 	<-chSignal
-	cancel()
+	log.Infof("received signal")
+	p.middleware.CtxCancel()
 }
 
 func (p *PlatformAccumulator) Start() {
 	defer p.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-
-	go p.signalListener(cancel)
+	go p.signalListener()
+	msgChan := make(chan middleware.MsgResponse)
+	go p.middleware.ConsumeAndProcess(count_acumulator, msgChan)
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.middleware.Ctx.Done():
 			return
-		default:
-			p.middleware.ConsumeAndProcess(count_acumulator, p.countGames)
-			p.count.Linux = 0 
-			p.count.Mac = 0 
-			p.count.Windows = 0 
+		case result := <-msgChan:
+			msg := result.Msg.Body
+			result.Msg.Ack(false)
+			p.countGames(msg)
 		}
 
 	}
 }
 
-func (p *PlatformAccumulator) countGames(msg []byte, finished *bool) error {
+func (p *PlatformAccumulator) countGames(msg []byte) error {
 	if string(msg) == "EOF" {
 		p.finished += 1
 		if p.finished == p.config.NumCounters {
 			log.Infof("Resultado FINAL: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
-			*finished = true
 			p.middleware.PublishInExchange(results_exchange, query_key, p.count.Serialize())
+			p.count.Linux = 0
+			p.count.Mac = 0
+			p.count.Windows = 0
 		}
 		return nil
 	}

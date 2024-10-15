@@ -36,7 +36,8 @@ type GenreFilter struct {
 }
 
 func NewGenreFilter(config GenreFilterConfig) (*GenreFilter, error) {
-	middleware, err := middleware.ConnectToMiddleware()
+	ctx, cancel := context.WithCancel(context.Background())
+	middleware, err := middleware.ConnectToMiddleware(ctx, cancel)
 	if err != nil {
 		return nil, err
 	}
@@ -69,28 +70,32 @@ func (c *GenreFilter) Close() {
 	c.middleware.Close()
 }
 
-func (c *GenreFilter) signalListener(cancel context.CancelFunc) {
+func (c *GenreFilter) signalListener() {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 	<-chSignal
-	cancel()
+	log.Infof("received signal")
+	c.middleware.CtxCancel()
 }
 
 func (p *GenreFilter) Start() {
 	log.Info("Starting genre filter")
 	defer p.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	go p.signalListener()
 
-	go p.signalListener(cancel)
+	msgChan := make(chan middleware.MsgResponse)
+	go p.middleware.ConsumeAndProcess(games_to_filter, msgChan)
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.middleware.Ctx.Done():
 			log.Info("Received sigterm")
 			return
-		default:
-			p.middleware.ConsumeAndProcess(games_to_filter, p.filterGames)
+		case result := <-msgChan:
+			msg := result.Msg.Body
+			result.Msg.Ack(false)
+			p.filterGames(msg)
 		}
 	}
 }
@@ -126,9 +131,8 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 	return nil
 }
 
-func (p *GenreFilter) filterGames(msg []byte, finished *bool) error {
+func (p *GenreFilter) filterGames(msg []byte) error {
 	if string(msg) == "EOF" {
-		*finished = true
 		p.middleware.PublishInExchange(filtered_games, "shooter.*.0", []byte("EOF"))
 		p.middleware.PublishInExchange(filtered_games, "shooter.*.1", []byte("EOF"))
 		p.middleware.PublishInExchange(filtered_games, "shooter.*.2", []byte("EOF"))

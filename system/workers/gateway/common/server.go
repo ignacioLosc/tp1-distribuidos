@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"example.com/system/communication/middleware"
 	mw "example.com/system/communication/middleware"
@@ -72,7 +71,8 @@ func (s *Server) Close() {
 }
 
 func middlewareGatewayInit() (*mw.Middleware, error) {
-	middleware, err := mw.ConnectToMiddleware()
+	ctx, cancel := context.WithCancel(context.Background())
+	middleware, err := mw.ConnectToMiddleware(ctx, cancel)
 	if err != nil {
 		return nil, err
 	}
@@ -93,12 +93,12 @@ func middlewareGatewayInit() (*mw.Middleware, error) {
 	return middleware, nil
 }
 
-func (s *Server) receiveMessage(conn net.Conn, channel chan []byte, ctx context.Context) error {
+func (s *Server) receiveMessage(conn net.Conn, channel chan []byte) error {
 	resultChan := make(chan utils.StringResult)
 	for {
 		go utils.DeserealizeString(conn, resultChan)
 		select {
-		case <-ctx.Done():
+		case <-s.middleware.Ctx.Done():
 			log.Infof("action: [receive] | result: fail | err: context cancelled")
 			return nil
 		case result := <-resultChan:
@@ -166,18 +166,19 @@ func formatGameNames(stringResult string, gameNames []string) string {
 	return stringResult
 }
 
-func (s *Server) waitForResults(conn net.Conn, ctx context.Context) error {
+func (s *Server) waitForResults(conn net.Conn) error {
 	msgChan := make(chan middleware.MsgResponse)
-	go s.middleware.ConsumeExchange2("query_results", msgChan)
+	go s.middleware.ConsumeExchange("query_results", msgChan)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-s.middleware.Ctx.Done():
 			log.Infof("waitForResults returning")
 			return nil
 
 		case result := <-msgChan:
 			stringResult := ""
 			msg := result.Msg.Body
+			result.Msg.Ack(false)
 			switch result.Msg.RoutingKey {
 			case "query1":
 				counter, err := protocol.DeserializeCounter(msg)
@@ -238,17 +239,15 @@ type NetConnResponse struct {
 func (s *Server) Start() {
 	defer s.listener.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-
 	go func() {
 		chSignal := make(chan os.Signal, 1)
 		signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 		<-chSignal
 		log.Infof("received signal")
-		cancel()
+		s.middleware.CtxCancel()
 	}()
 
-	go s.listenOnChannels(ctx)
+	go s.listenOnChannels()
 
 	connectionChan := make(chan NetConnResponse, 1)
 	go func() {
@@ -264,11 +263,11 @@ func (s *Server) Start() {
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-s.middleware.Ctx.Done():
 			return
 		case connectionResult := <-connectionChan:
-			go s.receiveDatasets(connectionResult.Conn, ctx)
-			connectionResult.Error = s.waitForResults(connectionResult.Conn, ctx)
+			go s.receiveDatasets(connectionResult.Conn)
+			connectionResult.Error = s.waitForResults(connectionResult.Conn)
 			if connectionResult.Error != nil {
 				log.Errorf("Error while receiving results: %v", connectionResult.Error)
 				continue
@@ -284,26 +283,26 @@ func (s *Server) signalListener(cancel context.CancelFunc) {
 	cancel()
 }
 
-func (s *Server) receiveDatasets(conn net.Conn, ctx context.Context) {
-	err := s.receiveMessage(conn, s.gamesChan, ctx)
+func (s *Server) receiveDatasets(conn net.Conn) {
+	err := s.receiveMessage(conn, s.gamesChan)
 	if err != nil {
 		log.Criticalf("action: receiving_games | result: fail | err: %s", err)
 	}
 	log.Infof("action: receiving_games | result: success")
 
-	err = s.receiveMessage(conn, s.reviewsChan, ctx)
+	err = s.receiveMessage(conn, s.reviewsChan)
 	if err != nil {
 		log.Criticalf("action: receiving_reviews | result: fail | err: %s", err)
 	}
 	log.Infof("action: receiving_reviews | result: success")
 }
 
-func (s *Server) listenOnChannels(ctx context.Context) {
+func (s *Server) listenOnChannels() {
 	for {
-		time.Sleep(time.Second)
-		log.Infof("sleeping")
+		// time.Sleep(time.Second)
+		// log.Infof("sleeping")
 		select {
-		case <-ctx.Done():
+		case <-s.middleware.Ctx.Done():
 			log.Infof("listenOnChannels returning")
 			return
 		case games := <-s.gamesChan:

@@ -35,7 +35,8 @@ type Sorter struct {
 }
 
 func NewSorter(config SorterConfig) (*Sorter, error) {
-	middleware, err := middleware.ConnectToMiddleware()
+	ctx, cancel := context.WithCancel(context.Background())
+	middleware, err := middleware.ConnectToMiddleware(ctx, cancel)
 	if err != nil {
 		log.Infof("Error connecting to middleware")
 		return nil, err
@@ -85,29 +86,31 @@ func (c *Sorter) Close() {
 	c.middleware.Close()
 }
 
-func (c *Sorter) signalListener(cancel context.CancelFunc) {
+func (c *Sorter) signalListener() {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 	<-chSignal
-	cancel()
+	log.Infof("received signal")
+	c.middleware.CtxCancel()
 }
 
 func (p *Sorter) Start() {
 	log.Info("Starting game sorter and top")
 	defer p.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	go p.signalListener()
 
-	go p.signalListener(cancel)
-
+	msgChan := make(chan middleware.MsgResponse)
+	go p.middleware.ConsumeAndProcess(results_from_filter, msgChan)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.middleware.Ctx.Done():
 			log.Info("Received sigterm")
 			return
-		default:
-			p.middleware.ConsumeAndProcess(results_from_filter, p.sortGames)
-			p.sendResults()
+		case result := <-msgChan:
+			msg := result.Msg.Body
+			result.Msg.Ack(false)
+			p.sortGames(msg)
 		}
 
 	}
@@ -161,10 +164,10 @@ func (p *Sorter) saveGame(game prot.Game, top int) error {
 	return nil
 }
 
-func (p *Sorter) sortGames(msg []byte, finished *bool) error {
+func (p *Sorter) sortGames(msg []byte) error {
 	if string(msg) == "EOF" {
 		log.Info("Received EOF %s")
-		*finished = true
+		p.sendResults()
 		return nil
 	}
 

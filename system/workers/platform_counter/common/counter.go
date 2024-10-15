@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"example.com/system/communication/middleware"
 	mw "example.com/system/communication/middleware"
 	"example.com/system/communication/protocol"
 	prot "example.com/system/communication/protocol"
@@ -25,14 +26,15 @@ type PlatformCounterConfig struct {
 }
 
 type PlatformCounter struct {
-	config     PlatformCounterConfig
-	middleware *mw.Middleware
-	count      prot.PlatformCount
+	config          PlatformCounterConfig
+	middleware      *mw.Middleware
+	count           prot.PlatformCount
 	endOfGamesQueue string
 }
 
 func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error) {
-	middleware, err := mw.ConnectToMiddleware()
+	ctx, cancel := context.WithCancel(context.Background())
+	middleware, err := mw.ConnectToMiddleware(ctx, cancel)
 	if err != nil {
 		return nil, err
 	}
@@ -86,35 +88,29 @@ func (p *PlatformCounter) Close() {
 	p.middleware.Close()
 }
 
-func (p *PlatformCounter) signalListener(cancel context.CancelFunc) {
+func (p *PlatformCounter) signalListener() {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 	<-chSignal
-	cancel()
+	log.Infof("received signal")
+	p.middleware.CtxCancel()
 }
 
 func (p *PlatformCounter) Start() {
 	defer p.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	go p.signalListener()
 
-	go p.signalListener(cancel)
-
+	msgChan := make(chan middleware.MsgResponse)
+	go p.middleware.ConsumeAndProcess(games_to_count, msgChan)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.middleware.Ctx.Done():
 			return
-		default:
-			// p.middleware.ConsumeMultipleAndProcess(games_to_count, p.endOfGamesQueue, p.countGames, p.endCounting)
-			p.middleware.ConsumeAndProcess(games_to_count, p.countGames)
-			err := p.sendResults()
-			if err != nil {
-				log.Error("Error sending results: %v", err)
-				return
-			}
-			p.count.Windows = 0
-			p.count.Linux = 0
-			p.count.Mac = 0
+		case result := <-msgChan:
+			msg := result.Msg.Body
+			result.Msg.Ack(false)
+			p.countGames(msg)
 		}
 	}
 }
@@ -127,9 +123,16 @@ func (p *PlatformCounter) endCounting(msg []byte, finished *bool) error {
 	return nil
 }
 
-func (p *PlatformCounter) countGames(msg []byte, finished *bool) error {
+func (p *PlatformCounter) countGames(msg []byte) error {
 	if string(msg) == "EOF" {
-		*finished = true
+		err := p.sendResults()
+		if err != nil {
+			log.Error("Error sending results: %v", err)
+			return err
+		}
+		p.count.Windows = 0
+		p.count.Linux = 0
+		p.count.Mac = 0
 		return nil
 	}
 

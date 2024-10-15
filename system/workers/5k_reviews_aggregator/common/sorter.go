@@ -36,7 +36,8 @@ type Aggregator struct {
 }
 
 func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
-	middleware, err := middleware.ConnectToMiddleware()
+	ctx, cancel := context.WithCancel(context.Background())
+	middleware, err := middleware.ConnectToMiddleware(ctx, cancel)
 	if err != nil {
 		log.Infof("Error connecting to middleware")
 		return nil, err
@@ -45,7 +46,7 @@ func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
 		config:     config,
 		middleware: middleware,
 		games:      make([]prot.GameReviewCount, 0),
-		finished: 	0,
+		finished:   0,
 	}
 
 	err = controller.middlewareInit()
@@ -76,30 +77,31 @@ func (c *Aggregator) Close() {
 	c.middleware.Close()
 }
 
-func (c *Aggregator) signalListener(cancel context.CancelFunc) {
+func (c *Aggregator) signalListener() {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 	<-chSignal
-	cancel()
+	log.Infof("received signal")
+	c.middleware.CtxCancel()
 }
 
 func (p *Aggregator) Start() {
 	log.Info("Starting game 5k reviews")
 	defer p.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	go p.signalListener()
 
-	go p.signalListener(cancel)
-
+	msgChan := make(chan middleware.MsgResponse)
+	p.middleware.ConsumeAndProcess(action_negative_reviews, msgChan)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.middleware.Ctx.Done():
 			log.Info("Received sigterm")
 			return
-		default:
-			p.middleware.ConsumeAndProcess(action_negative_reviews, p.filterGames)
-			p.sendGames()
-			p.finished = 0
+		case result := <-msgChan:
+			msg := result.Msg.Body
+			result.Msg.Ack(false)
+			p.filterGames(msg)
 		}
 
 	}
@@ -130,11 +132,12 @@ func (p *Aggregator) shouldKeep(game prot.GameReviewCount) (bool, error) {
 	}
 }
 
-func (p *Aggregator) filterGames(msg []byte, finished *bool) error {
+func (p *Aggregator) filterGames(msg []byte) error {
 	if string(msg) == "EOF" {
 		p.finished++
 		if p.finished == 5 {
-			*finished = true
+			p.sendGames()
+			p.finished = 0
 		}
 		return nil
 	}

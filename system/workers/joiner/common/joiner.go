@@ -18,10 +18,10 @@ var log = logging.MustGetLogger("log")
 const (
 	shooter_negative_joined_queue = "joined_shooter_negative"
 	shooter_positive_joined_queue = "joined_shooter_positive"
-	indies_joined_queue = "joined_reviews_indies"
+	indies_joined_queue           = "joined_reviews_indies"
 
-	filtered_games       = "filtered_games"
-	filtered_reviews     = "filtered_reviews"
+	filtered_games   = "filtered_games"
+	filtered_reviews = "filtered_reviews"
 )
 
 type JoinerConfig struct {
@@ -39,15 +39,16 @@ type Joiner struct {
 }
 
 func NewJoiner(config JoinerConfig) (*Joiner, error) {
-	middleware, err := middleware.ConnectToMiddleware()
+	ctx, cancel := context.WithCancel(context.Background())
+	middleware, err := middleware.ConnectToMiddleware(ctx, cancel)
 	if err != nil {
 		log.Errorf("Error connecting to middleware: %s", err)
 		return nil, err
 	}
 
 	joiner := &Joiner{
-		config:     config,
-		middleware: middleware,
+		config:                config,
+		middleware:            middleware,
 		savedGameReviewCounts: make(map[string]protocol.GameReviewCount),
 	}
 
@@ -120,33 +121,46 @@ func (j *Joiner) Close() {
 	j.middleware.Close()
 }
 
-func (j *Joiner) signalListener(cancel context.CancelFunc) {
+func (j *Joiner) signalListener() {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, os.Interrupt, syscall.SIGTERM)
 	<-chSignal
-	cancel()
+	log.Infof("received signal")
+	j.middleware.CtxCancel()
 }
 
 func (j *Joiner) Start() {
 	defer j.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	go j.signalListener()
 
-	go j.signalListener(cancel)
+	gamesEOFChan := make(chan bool)
+
+	log.Info("Joiner reading games")
+	gamesMsgChan := make(chan middleware.MsgResponse)
+	go j.middleware.ConsumeAndProcess(j.gamesQueue, gamesMsgChan)
+
+	reviewsMsgChan := make(chan middleware.MsgResponse)
+	go func() {
+		<-gamesEOFChan
+		log.Info("Joiner reading reviews")
+		j.middleware.ConsumeAndProcess(j.reviewsQueue, reviewsMsgChan)
+	}()
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-j.middleware.Ctx.Done():
 			return
-		default:
-			log.Info("Joiner reading games")
-			j.middleware.ConsumeAndProcess(j.gamesQueue, j.saveGames)
 
-			log.Info("Joiner reading reviews")
-			j.middleware.ConsumeAndProcess(j.reviewsQueue, j.joinReviewsAndGames)
+		case gameResult := <-gamesMsgChan:
+			msg := gameResult.Msg.Body
+			gameResult.Msg.Ack(false)
+			j.saveGames(msg, gamesEOFChan)
 
-			log.Info("Joiner finished reading games and reviews")
-			j.sendJoinedResults()
+		case reviewResult := <-reviewsMsgChan:
+			msg := reviewResult.Msg.Body
+			reviewResult.Msg.Ack(false)
+			j.joinReviewsAndGames(msg)
 		}
 	}
 }
@@ -181,7 +195,7 @@ func (j *Joiner) sendJoinedResults() {
 		log.Errorf("Error publishing game review count to shooter negative joined queue: %s", err)
 	}
 
-	err = j.middleware.PublishInQueue(shooter_positive_joined_queue,[]byte("EOF"))
+	err = j.middleware.PublishInQueue(shooter_positive_joined_queue, []byte("EOF"))
 	if err != nil {
 		log.Errorf("Error publishing game review count to shooter positive joined queue: %s", err)
 	}
@@ -192,9 +206,9 @@ func (j *Joiner) sendJoinedResults() {
 	}
 }
 
-func (p *Joiner) saveGames(msg []byte, finished *bool) error {
+func (p *Joiner) saveGames(msg []byte, gamesEOFChan chan bool) error {
 	if string(msg) == "EOF" {
-		*finished = true
+		gamesEOFChan <- true
 		return nil
 	}
 
@@ -203,7 +217,7 @@ func (p *Joiner) saveGames(msg []byte, finished *bool) error {
 		return fmt.Errorf("Error deserializing game: %s", err)
 	}
 
-	p.savedGameReviewCounts[game.AppID]  = protocol.GameReviewCount{
+	p.savedGameReviewCounts[game.AppID] = protocol.GameReviewCount{
 		AppName:                    game.Name,
 		PositiveReviewCount:        0,
 		NegativeReviewCount:        0,
@@ -213,9 +227,10 @@ func (p *Joiner) saveGames(msg []byte, finished *bool) error {
 	return nil
 }
 
-func (p *Joiner) joinReviewsAndGames(msg []byte, finished *bool) error {
+func (p *Joiner) joinReviewsAndGames(msg []byte) error {
 	if string(msg) == "EOF" {
-		*finished = true
+		log.Info("Joiner finished reading games and reviews")
+		p.sendJoinedResults()
 		return nil
 	}
 

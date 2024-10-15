@@ -1,6 +1,6 @@
 {
-	"GAMES_FILE": "./.data2/games.csv",
-	"REVIEWS_FILE": "./.data2/dataset.csv",
+	"GAMES_FILE": "./.data/games.csv",
+	"REVIEWS_FILE": "./.data/dataset.csv",
 	"BATCH_SIZE": 2,
 	"NUM_JOINERS": 5,
 	"NUM_SORTERS": 5,
