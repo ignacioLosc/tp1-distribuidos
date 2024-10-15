@@ -19,6 +19,8 @@ const (
 	action_negative_reviews = "joined_shooter_negative"
 	query_key               = "query4"
 	results_exchange        = "results"
+	control                 = "control"
+	communication           = "communication"
 )
 
 type AggregatorConfig struct {
@@ -37,7 +39,7 @@ type Aggregator struct {
 
 func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	middleware, err := middleware.ConnectToMiddleware(ctx, cancel)
+	middleware, err := middleware.CreateMiddleware(ctx, cancel)
 	if err != nil {
 		log.Infof("Error connecting to middleware")
 		return nil, err
@@ -58,13 +60,23 @@ func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
 }
 
 func (c *Aggregator) middlewareInit() error {
-	err := c.middleware.DeclareExchange(results_exchange, "direct")
+	err := c.middleware.DeclareChannel(communication)
+	if err != nil {
+		return err
+	}
+
+	err = c.middleware.DeclareChannel(control)
+	if err != nil {
+		return err
+	}
+
+	err = c.middleware.DeclareExchange(communication, results_exchange, "direct")
 	if err != nil {
 		log.Errorf("Error declaring results exchange")
 		return err
 	}
 
-	_, err = c.middleware.DeclareDirectQueue(action_negative_reviews)
+	_, err = c.middleware.DeclareDirectQueue(communication, action_negative_reviews)
 	if err != nil {
 		log.Errorf("Error declaring action_negative_reviews queue")
 		return err
@@ -92,7 +104,7 @@ func (p *Aggregator) Start() {
 	go p.signalListener()
 
 	msgChan := make(chan middleware.MsgResponse)
-	p.middleware.ConsumeAndProcess(action_negative_reviews, msgChan)
+	p.middleware.ConsumeAndProcess(communication, action_negative_reviews, msgChan)
 	for {
 		select {
 		case <-p.middleware.Ctx.Done():
@@ -121,7 +133,7 @@ func (p *Aggregator) sendGames() {
 		gameBuffer := protocol.SerializeGameReviewCount(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
-	p.middleware.PublishInExchange(results_exchange, query_key, gamesBuffer)
+	p.middleware.PublishInExchange(communication, results_exchange, query_key, gamesBuffer)
 }
 
 func (p *Aggregator) shouldKeep(game prot.GameReviewCount) (bool, error) {

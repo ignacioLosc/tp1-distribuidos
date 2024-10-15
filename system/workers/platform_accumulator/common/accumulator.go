@@ -19,6 +19,8 @@ const (
 	query_answer1    = "query_answer_1"
 	results_exchange = "results"
 	query_key        = "query1"
+	control          = "control"
+	communication    = "communication"
 )
 
 type PlatformAccumulatorConfig struct {
@@ -36,7 +38,7 @@ type PlatformAccumulator struct {
 
 func NewPlatformAccumulator(config PlatformAccumulatorConfig) (*PlatformAccumulator, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	middleware, err := mw.ConnectToMiddleware(ctx, cancel)
+	middleware, err := mw.CreateMiddleware(ctx, cancel)
 	if err != nil {
 		return nil, err
 	}
@@ -59,17 +61,27 @@ func NewPlatformAccumulator(config PlatformAccumulatorConfig) (*PlatformAccumula
 }
 
 func (p PlatformAccumulator) middlewareAccumulatorInit() error {
-	_, err := p.middleware.DeclareDirectQueue(count_acumulator)
+	err := p.middleware.DeclareChannel(communication)
 	if err != nil {
 		return err
 	}
 
-	err = p.middleware.DeclareExchange(results_exchange, "direct")
+	err = p.middleware.DeclareChannel(control)
 	if err != nil {
 		return err
 	}
 
-	_, err = p.middleware.DeclareDirectQueue(query_answer1)
+	_, err = p.middleware.DeclareDirectQueue(communication, count_acumulator)
+	if err != nil {
+		return err
+	}
+
+	err = p.middleware.DeclareExchange(communication, results_exchange, "direct")
+	if err != nil {
+		return err
+	}
+
+	_, err = p.middleware.DeclareDirectQueue(communication, query_answer1)
 	if err != nil {
 		return err
 	}
@@ -94,7 +106,7 @@ func (p *PlatformAccumulator) Start() {
 
 	go p.signalListener()
 	msgChan := make(chan middleware.MsgResponse)
-	go p.middleware.ConsumeAndProcess(count_acumulator, msgChan)
+	go p.middleware.ConsumeAndProcess(communication, count_acumulator, msgChan)
 
 	for {
 		select {
@@ -114,7 +126,7 @@ func (p *PlatformAccumulator) countGames(msg []byte) error {
 		p.finished += 1
 		if p.finished == p.config.NumCounters {
 			log.Infof("Resultado FINAL: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
-			p.middleware.PublishInExchange(results_exchange, query_key, p.count.Serialize())
+			p.middleware.PublishInExchange(communication, results_exchange, query_key, p.count.Serialize())
 			p.count.Linux = 0
 			p.count.Mac = 0
 			p.count.Windows = 0

@@ -20,6 +20,9 @@ const (
 	shooter_positive_joined_queue = "joined_shooter_positive"
 	query_key                     = "query5"
 	results_exchange              = "results"
+
+	control       = "control"
+	communication = "communication"
 )
 
 type PercentileCalculatorConfig struct {
@@ -38,7 +41,7 @@ type PercentileCalculator struct {
 
 func NewPercentileCalculator(config PercentileCalculatorConfig) (*PercentileCalculator, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	middleware, err := middleware.ConnectToMiddleware(ctx, cancel)
+	middleware, err := middleware.CreateMiddleware(ctx, cancel)
 	if err != nil {
 		log.Infof("Error connecting to middleware")
 		return nil, err
@@ -59,13 +62,23 @@ func NewPercentileCalculator(config PercentileCalculatorConfig) (*PercentileCalc
 }
 
 func (c *PercentileCalculator) middlewareInit() error {
-	err := c.middleware.DeclareExchange(results_exchange, "direct")
+	err := c.middleware.DeclareChannel(communication)
+	if err != nil {
+		return err
+	}
+
+	err = c.middleware.DeclareChannel(control)
+	if err != nil {
+		return err
+	}
+
+	err = c.middleware.DeclareExchange(communication, results_exchange, "direct")
 	if err != nil {
 		log.Errorf("Error declaring results exchange")
 		return err
 	}
 
-	_, err = c.middleware.DeclareDirectQueue(shooter_positive_joined_queue)
+	_, err = c.middleware.DeclareDirectQueue(communication, shooter_positive_joined_queue)
 	if err != nil {
 		log.Errorf("Error declaring action_negative_reviews queue")
 		return err
@@ -93,7 +106,7 @@ func (p *PercentileCalculator) Start() {
 	go p.signalListener()
 
 	msgChan := make(chan middleware.MsgResponse)
-	p.middleware.ConsumeAndProcess(shooter_positive_joined_queue, msgChan)
+	p.middleware.ConsumeAndProcess(communication, shooter_positive_joined_queue, msgChan)
 	for {
 		select {
 		case <-p.middleware.Ctx.Done():
@@ -134,7 +147,7 @@ func (p *PercentileCalculator) sendGames(games []protocol.GameReviewCount) {
 		gameBuffer := protocol.SerializeGameReviewCount(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
-	p.middleware.PublishInExchange(results_exchange, query_key, gamesBuffer)
+	p.middleware.PublishInExchange(communication, results_exchange, query_key, gamesBuffer)
 }
 
 func (p *PercentileCalculator) accumulateGames(msg []byte) error {

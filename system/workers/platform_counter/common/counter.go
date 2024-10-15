@@ -19,6 +19,8 @@ var log = logging.MustGetLogger("log")
 const (
 	games_to_count   = "games_to_count"
 	count_acumulator = "count_accumulator"
+	control          = "control"
+	communication    = "communication"
 )
 
 type PlatformCounterConfig struct {
@@ -34,7 +36,7 @@ type PlatformCounter struct {
 
 func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	middleware, err := mw.ConnectToMiddleware(ctx, cancel)
+	middleware, err := mw.CreateMiddleware(ctx, cancel)
 	if err != nil {
 		return nil, err
 	}
@@ -55,28 +57,38 @@ func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error) 
 }
 
 func (p PlatformCounter) middlewareCounterInit() error {
-	_, err := p.middleware.DeclareDirectQueue(games_to_count)
+	err := p.middleware.DeclareChannel(communication)
 	if err != nil {
 		return err
 	}
 
-	_, err = p.middleware.DeclareDirectQueue(count_acumulator)
+	err = p.middleware.DeclareChannel(control)
 	if err != nil {
 		return err
 	}
 
-	qName, err := p.middleware.DeclareTemporaryQueue()
+	_, err = p.middleware.DeclareDirectQueue(communication, games_to_count)
+	if err != nil {
+		return err
+	}
+
+	_, err = p.middleware.DeclareDirectQueue(communication, count_acumulator)
+	if err != nil {
+		return err
+	}
+
+	qName, err := p.middleware.DeclareTemporaryQueue(communication)
 	if err != nil {
 		return err
 	}
 	p.endOfGamesQueue = qName
 
-	err = p.middleware.DeclareExchange("end_of_games", "fanout")
+	err = p.middleware.DeclareExchange(communication, "end_of_games", "fanout")
 	if err != nil {
 		return err
 	}
 
-	err = p.middleware.BindQueueToExchange("end_of_games", p.endOfGamesQueue, "")
+	err = p.middleware.BindQueueToExchange(communication, "end_of_games", p.endOfGamesQueue, "")
 	if err != nil {
 		return err
 	}
@@ -102,7 +114,7 @@ func (p *PlatformCounter) Start() {
 	go p.signalListener()
 
 	msgChan := make(chan middleware.MsgResponse)
-	go p.middleware.ConsumeAndProcess(games_to_count, msgChan)
+	go p.middleware.ConsumeAndProcess(communication, games_to_count, msgChan)
 	for {
 		select {
 		case <-p.middleware.Ctx.Done():
@@ -163,11 +175,11 @@ func (p *PlatformCounter) countGames(msg []byte) error {
 
 func (p *PlatformCounter) sendResults() error {
 	log.Debugf("Platform final: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
-	err := p.middleware.PublishInQueue(count_acumulator, p.count.Serialize())
+	err := p.middleware.PublishInQueue(communication, count_acumulator, p.count.Serialize())
 	if err != nil {
 		return err
 	}
-	err = p.middleware.PublishInQueue(count_acumulator, []byte("EOF"))
+	err = p.middleware.PublishInQueue(communication, count_acumulator, []byte("EOF"))
 	if err != nil {
 		return err
 	}

@@ -21,6 +21,9 @@ const (
 	query_key           = "query2"
 	results_from_filter = "results_from_filter"
 	filtered_games      = "filtered_games"
+
+	control       = "control"
+	communication = "communication"
 )
 
 type SorterConfig struct {
@@ -36,7 +39,7 @@ type Sorter struct {
 
 func NewSorter(config SorterConfig) (*Sorter, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	middleware, err := middleware.ConnectToMiddleware(ctx, cancel)
+	middleware, err := middleware.CreateMiddleware(ctx, cancel)
 	if err != nil {
 		log.Infof("Error connecting to middleware")
 		return nil, err
@@ -56,25 +59,35 @@ func NewSorter(config SorterConfig) (*Sorter, error) {
 }
 
 func (c *Sorter) middlewareInit() error {
-	err := c.middleware.DeclareExchange(filtered_games, "topic")
+	err := c.middleware.DeclareChannel(communication)
+	if err != nil {
+		return err
+	}
+
+	err = c.middleware.DeclareChannel(control)
+	if err != nil {
+		return err
+	}
+
+	err = c.middleware.DeclareExchange(communication, filtered_games, "topic")
 	if err != nil {
 		log.Errorf("Error declaring filtered_games exchange")
 		return err
 	}
 
-	_, err = c.middleware.DeclareDirectQueue(results_from_filter)
+	_, err = c.middleware.DeclareDirectQueue(communication, results_from_filter)
 	if err != nil {
 		log.Errorf("Error declaring results_from_filter queue")
 		return err
 	}
 
-	err = c.middleware.BindQueueToExchange(filtered_games, results_from_filter, "indie.2010.*")
+	err = c.middleware.BindQueueToExchange(communication, filtered_games, results_from_filter, "indie.2010.*")
 	if err != nil {
 		log.Errorf("Error binding queue to filtered_games exchange")
 		return err
 	}
 
-	err = c.middleware.DeclareExchange(results_exchange, "direct")
+	err = c.middleware.DeclareExchange(communication, results_exchange, "direct")
 	if err != nil {
 		log.Errorf("Error declaring results exchange")
 		return err
@@ -101,7 +114,7 @@ func (p *Sorter) Start() {
 	go p.signalListener()
 
 	msgChan := make(chan middleware.MsgResponse)
-	go p.middleware.ConsumeAndProcess(results_from_filter, msgChan)
+	go p.middleware.ConsumeAndProcess(communication, results_from_filter, msgChan)
 	for {
 		select {
 		case <-p.middleware.Ctx.Done():
@@ -135,7 +148,7 @@ func (p *Sorter) sendResults() {
 		gameBuffer := protocol.SerializeGame(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
-	p.middleware.PublishInExchange(results_exchange, query_key, gamesBuffer)
+	p.middleware.PublishInExchange(communication, results_exchange, query_key, gamesBuffer)
 }
 
 func (p *Sorter) shouldKeep(game prot.Game, sortBy string, top int) (bool, error) {
