@@ -17,7 +17,7 @@ def basic_service(worker, env: list = [], container_name=None, log_level=DEFAULT
         },
         'entrypoint': f'/app/{worker}',
         'environment': [f'CLI_LOG_LEVEL={log_level}'] + env,
-        'networks': [NETWORK_NAME]
+        # 'networks': [NETWORK_NAME]
     }
 
     if container_name:
@@ -25,16 +25,17 @@ def basic_service(worker, env: list = [], container_name=None, log_level=DEFAULT
     else:
         obj['container_name'] = worker
 
+    obj['depends_on'] = ['rabbitmq']
     if worker != 'gateway':
-        obj['depends_on'] = ['gateway']
+        obj['depends_on'].append('gateway')
 
     return obj
 
 
-def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num_sorters=5, num_mappers=1, num_counters=1):
+def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num_sorters=5, num_mappers=1, num_counters=1, batch_size=5):
     services = {}
     for worker in worker_list:
-        services[worker] = basic_service(worker) 
+        services[worker] = basic_service(worker)
 
     for genre in ['Shooter', 'Indie']:
         for i in range(num_joiners):
@@ -54,6 +55,7 @@ def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num
         services[name] = basic_service('platform_counter', [f'CLI_COUNTER_ID={i}'], name)
 
     services['gateway']['environment'].append('CLI_SERVER_PORT=5555')
+    services['gateway']['environment'].append(f'CLI_MAPPERS={num_mappers}')
 
     services['client']['volumes'] = client_volumes if client_volumes else [
         './.data/games.csv:/app/games.csv',
@@ -61,6 +63,7 @@ def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num
     ]
     services['client']['environment'].append('CLI_SERVER_ADDRESS=gateway:5555')
     services['client']['environment'].append('CLI_DATA_PATH=.data')
+    services['client']['environment'].append(f'CLI_BATCH_SIZE={batch_size}')
 
     services['5k_reviews_aggregator']['environment'].append(f'CLI_JOINERS={num_joiners}')
     services['90th_percentile_calculator']['environment'].append(f'CLI_JOINERS={num_sorters}')
@@ -71,13 +74,25 @@ def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num
     services['platform_accumulator']['environment'].append(f'CLI_COUNTERS={num_counters}')
     services['gateway']['environment'].append(f'CLI_COUNTERS={num_counters}')
 
+    services['rabbitmq'] = {
+            'image': 'rabbitmq:3.9.16-management-alpine',
+            'container_name': 'rabbitmq',
+            'ports': ['5672:5672', '15672:15672'],
+            'environment': {
+                'RABBITMQ_DEFAULT_USER': 'guest',
+                'RABBITMQ_DEFAULT_PASS': 'guest'
+            },
+            # 'networks': [NETWORK_NAME],
+    }
+
+
     compose_data = {
         'name': 'steam-analyzer',
         'services': services,
         'networks': {
             NETWORK_NAME: {
-                'external': True,
-                'name': NETWORK_NAME
+                # 'external': True,
+                # 'name': NETWORK_NAME
             }
         }
     }
@@ -86,7 +101,7 @@ def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num
         yaml.dump(compose_data, file, default_flow_style=False)
 
 def open_config(filename='config.json'):
-    try: 
+    try:
         with open(filename) as file:
             return json.load(file)
     except FileNotFoundError:
@@ -127,12 +142,12 @@ worker_list = [
     # "joiner"
 ]
 
-game_file = config['GAMES_FILE'] 
+game_file = config['GAMES_FILE']
 if not game_file:
     print("Please provide the games file path ('GAMES_FILE') in the config ")
     exit(1)
 
-reviews_file = config['REVIEWS_FILE'] 
+reviews_file = config['REVIEWS_FILE']
 if not game_file:
     print("Please provide the reviews file path ('REVIEWS_FILE') in the config")
     exit(1)
@@ -143,5 +158,6 @@ generate_docker_compose(worker_list,
                         num_joiners=config.get("NUM_JOINERS", None),
                         num_sorters=config.get("NUM_SORTERS", None),
                         num_mappers=config.get("NUM_MAPPERS", None),
-                        num_counters=config.get("NUM_COUNTERS", None)
+                        num_counters=config.get("NUM_COUNTERS", None),
+                        batch_size=config.get("BATCH_SIZE", None)
                         )

@@ -105,7 +105,8 @@ func (p *PlatformCounter) Start() {
 		case <-ctx.Done():
 			return
 		default:
-			p.middleware.ConsumeMultipleAndProcess(games_to_count, p.endOfGamesQueue, p.countGames, p.endCounting)
+			// p.middleware.ConsumeMultipleAndProcess(games_to_count, p.endOfGamesQueue, p.countGames, p.endCounting)
+			p.middleware.ConsumeAndProcess(games_to_count, p.countGames)
 			err := p.sendResults()
 			if err != nil {
 				log.Error("Error sending results: %v", err)
@@ -128,6 +129,7 @@ func (p *PlatformCounter) endCounting(msg []byte, finished *bool) error {
 
 func (p *PlatformCounter) countGames(msg []byte, finished *bool) error {
 	if string(msg) == "EOF" {
+		*finished = true
 		return nil
 	}
 

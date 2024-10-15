@@ -20,7 +20,7 @@ var log = logging.MustGetLogger("log")
 
 type ClientConfig struct {
 	ServerAddress string
-	DataPath      string
+	BatchSize     int
 }
 
 type Client struct {
@@ -103,7 +103,7 @@ func (c *Client) sendFiles() {
 	defer reviewsFile.Close()
 
 	log.Info("action: begin_sending_games")
-	err = SendCSV(c.conn, gamesReader, gameParser)
+	err = SendCSV(c.conn, gamesReader, gameParser, c.config.BatchSize)
 	if err != nil {
 		log.Errorf("action: sending_games | result: error | err: %v", err)
 		return
@@ -111,7 +111,7 @@ func (c *Client) sendFiles() {
 	log.Info("action: sent_games | result: success ")
 
 	log.Info("action: begin_sending_reviews")
-	err = SendCSV(c.conn, reviewsReader, reviewParser)
+	err = SendCSV(c.conn, reviewsReader, reviewParser, c.config.BatchSize)
 	if err != nil {
 		log.Errorf("action: sending_reviews | result: error ")
 		return
@@ -155,13 +155,12 @@ func reviewParser(record []string) ([]byte, error) {
 	return protocol.SerializeReview(&review), nil
 }
 
-func SendCSV(conn net.Conn, fileReader *csv.Reader, parser func([]string) ([]byte, error)) error {
+func SendCSV(conn net.Conn, fileReader *csv.Reader, parser func([]string) ([]byte, error), batchSize int) error {
 	_, err := fileReader.Read()
 	if err != nil {
 		return fmt.Errorf("Unable to read header from file: %v", err)
 	}
 
-	batchSize := 2
 	finished := false
 
 	for !finished {
