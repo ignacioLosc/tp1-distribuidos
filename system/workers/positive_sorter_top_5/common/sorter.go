@@ -109,7 +109,7 @@ type GameSummary struct {
 }
 
 func (p *Sorter) sendResults() {
-	log.Infof("Resultado FINAL sort y top 5:")
+	log.Infof("Resultado PARCIAL sort y top %d:", p.config.Top)
 	for _, game := range p.games {
 		log.Infof("Name: %s, positiveReviewCount: %d", game.AppName, game.PositiveReviewCount)
 	}
@@ -133,10 +133,11 @@ func (p *Sorter) shouldKeep(game prot.GameReviewCount, sortBy string, top int) (
 		} else if p.games[0].PositiveReviewCount < game.PositiveReviewCount {
 			return true, nil
 		} else {
+			log.Info("Discarding game %d, current lowest %d", game.PositiveReviewCount, p.games[0].PositiveReviewCount)
 			return false, nil
 		}
 	}
-	return true, nil
+	return false, nil
 }
 
 func (p *Sorter) saveGame(game prot.GameReviewCount, top int) error {

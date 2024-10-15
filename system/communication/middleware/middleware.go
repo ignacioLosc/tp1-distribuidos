@@ -329,7 +329,7 @@ func (m *Middleware) ConsumeExchange2(queueName string, msgChan chan MsgResponse
 			msgChan <- MsgResponse{amqp.Delivery{}, errors.New(fmt.Sprintf("There was an error consuming a message from the %s queue", queueName))}
 			return
 		}
-		d.Ack(false)
+		d.Ack(false) // mandar ack en MsgResponse
 		msgChan <- MsgResponse{d, nil}
 	}
 }
