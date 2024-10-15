@@ -14,7 +14,7 @@ down:
 .PHONY: down
 
 logs:
-	docker compose -f ${COMPOSE_FILE} logs -f | grep -v ^rabbitmq
+	docker compose -f ${COMPOSE_FILE} logs -f
 .PHONY: logs
 
 compose:

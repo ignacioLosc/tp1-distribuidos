@@ -78,6 +78,9 @@ def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num
             'image': 'rabbitmq:3.9.16-management-alpine',
             'container_name': 'rabbitmq',
             'ports': ['5672:5672', '15672:15672'],
+            'logging': {
+                'driver': 'none'
+            },
             'environment': {
                 'RABBITMQ_DEFAULT_USER': 'guest',
                 'RABBITMQ_DEFAULT_PASS': 'guest'
