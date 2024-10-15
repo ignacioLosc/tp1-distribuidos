@@ -318,8 +318,6 @@ func (s *Server) receiveDatasets(conn net.Conn) {
 
 func (s *Server) listenOnChannels() {
 	for {
-		// time.Sleep(time.Second)
-		// log.Infof("sleeping")
 		select {
 		case <-s.middleware.Ctx.Done():
 			log.Infof("listenOnChannels returning")
