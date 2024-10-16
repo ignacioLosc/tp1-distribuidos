@@ -123,7 +123,7 @@ type GameSummary struct {
 }
 
 func (p *Sorter) sendResults() {
-	log.Infof("Resultado PARCIAL sort y top %d:", p.config.Top)
+	log.Infof("Resultado PARCIAL sort y top %s:", p.config.Top)
 	for _, game := range p.games {
 		log.Infof("Name: %s, positiveReviewCount: %d", game.AppName, game.PositiveReviewCount)
 	}

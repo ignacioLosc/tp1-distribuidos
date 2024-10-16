@@ -104,7 +104,7 @@ func (p *Aggregator) Start() {
 	go p.signalListener()
 
 	msgChan := make(chan middleware.MsgResponse)
-	p.middleware.ConsumeAndProcess(communication, action_negative_reviews, msgChan)
+	go p.middleware.ConsumeAndProcess(communication, action_negative_reviews, msgChan)
 	for {
 		select {
 		case <-p.middleware.Ctx.Done():

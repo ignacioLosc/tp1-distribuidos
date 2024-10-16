@@ -106,7 +106,7 @@ func (p *Aggregator) Start() {
 	go p.signalListener()
 
 	msgChan := make(chan middleware.MsgResponse)
-	p.middleware.ConsumeAndProcess(communication, top_5_partial_results, msgChan)
+	go p.middleware.ConsumeAndProcess(communication, top_5_partial_results, msgChan)
 	for {
 		select {
 		case <-p.middleware.Ctx.Done():

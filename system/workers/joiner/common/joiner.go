@@ -39,6 +39,7 @@ type Joiner struct {
 	gamesQueue            string
 	reviewsQueue          string
 	savedGameReviewCounts map[string]protocol.GameReviewCount
+	finishedMappers	   	  int
 }
 
 func NewJoiner(config JoinerConfig) (*Joiner, error) {
@@ -149,14 +150,12 @@ func (j *Joiner) Start() {
 
 	gamesEOFChan := make(chan bool)
 
-	log.Info("Joiner reading games")
 	gamesMsgChan := make(chan middleware.MsgResponse)
 	go j.middleware.ConsumeAndProcess(communication, j.gamesQueue, gamesMsgChan)
 
 	reviewsMsgChan := make(chan middleware.MsgResponse)
 	go func() {
 		<-gamesEOFChan
-		log.Info("Joiner reading reviews")
 		j.middleware.ConsumeAndProcess(communication, j.reviewsQueue, reviewsMsgChan)
 	}()
 
@@ -221,6 +220,7 @@ func (j *Joiner) sendJoinedResults() {
 
 func (p *Joiner) saveGames(msg []byte, gamesEOFChan chan bool) error {
 	if string(msg) == "EOF" {
+		log.Info("Joiner finished reading games")
 		gamesEOFChan <- true
 		return nil
 	}
@@ -242,8 +242,13 @@ func (p *Joiner) saveGames(msg []byte, gamesEOFChan chan bool) error {
 
 func (p *Joiner) joinReviewsAndGames(msg []byte) error {
 	if string(msg) == "EOF" {
-		log.Info("Joiner finished reading games and reviews")
-		p.sendJoinedResults()
+		p.finishedMappers++
+
+		if p.finishedMappers == 10 {
+			p.sendJoinedResults()
+			log.Info("Joiner finished reading games and reviews")
+		}
+
 		return nil
 	}
 

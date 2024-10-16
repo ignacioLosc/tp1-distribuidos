@@ -32,7 +32,11 @@ func RecvAll(sock net.Conn, sz int) ([]byte, error) {
 		n, err := sock.Read(buf[totalRead:])
 		if err != nil {
 			if err == io.EOF {
-				return buf[:totalRead], nil
+				if totalRead < sz {
+					return nil, fmt.Errorf("failed to read data: %w.", err)
+				} else {
+					return buf[:totalRead], nil
+				}
 			}
 			return nil, err
 		}
