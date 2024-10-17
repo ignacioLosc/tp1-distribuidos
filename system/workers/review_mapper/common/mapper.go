@@ -118,8 +118,12 @@ func (p *ReviewMapper) Start() {
 			return
 		case result := <-msgChan:
 			msg := result.Msg.Body
-			result.Msg.Ack(false)
-			p.mapReviews(msg)
+			err := p.mapReviews(msg)
+			if err != nil {
+				result.Msg.Nack(false, false)
+			} else {
+				result.Msg.Ack(false)
+			}
 		}
 	}
 }
