@@ -106,7 +106,7 @@ func (p *PercentileCalculator) Start() {
 	go p.signalListener()
 
 	msgChan := make(chan middleware.MsgResponse)
-	go p.middleware.ConsumeAndProcess(communication, shooter_positive_joined_queue, msgChan)
+	go p.middleware.ConsumeFromQueue(communication, shooter_positive_joined_queue, msgChan)
 	for {
 		select {
 		case <-p.middleware.Ctx.Done():

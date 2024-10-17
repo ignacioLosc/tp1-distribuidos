@@ -110,7 +110,7 @@ func (p *ReviewMapper) Start() {
 	go p.signalListener()
 
 	msgChan := make(chan middleware.MsgResponse)
-	go p.middleware.ConsumeAndProcess(communication, reviews, msgChan)
+	go p.middleware.ConsumeFromQueue(communication, reviews, msgChan)
 	for {
 		select {
 		case <-p.middleware.Ctx.Done():

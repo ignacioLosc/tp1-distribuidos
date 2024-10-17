@@ -98,7 +98,7 @@ func (p *GenreFilter) Start() {
 	go p.signalListener()
 
 	msgChan := make(chan middleware.MsgResponse)
-	go p.middleware.ConsumeAndProcess(communication, games_to_filter, msgChan)
+	go p.middleware.ConsumeFromQueue(communication, games_to_filter, msgChan)
 
 	for {
 		select {

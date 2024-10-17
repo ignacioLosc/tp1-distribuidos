@@ -106,7 +106,7 @@ func (p *PlatformAccumulator) Start() {
 
 	go p.signalListener()
 	msgChan := make(chan middleware.MsgResponse)
-	go p.middleware.ConsumeAndProcess(communication, count_acumulator, msgChan)
+	go p.middleware.ConsumeFromQueue(communication, count_acumulator, msgChan)
 
 	for {
 		select {

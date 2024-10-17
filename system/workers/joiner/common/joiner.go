@@ -151,12 +151,12 @@ func (j *Joiner) Start() {
 	gamesEOFChan := make(chan bool)
 
 	gamesMsgChan := make(chan middleware.MsgResponse)
-	go j.middleware.ConsumeAndProcess(communication, j.gamesQueue, gamesMsgChan)
+	go j.middleware.ConsumeFromQueue(communication, j.gamesQueue, gamesMsgChan)
 
 	reviewsMsgChan := make(chan middleware.MsgResponse)
 	go func() {
 		<-gamesEOFChan
-		j.middleware.ConsumeAndProcess(communication, j.reviewsQueue, reviewsMsgChan)
+		j.middleware.ConsumeFromQueue(communication, j.reviewsQueue, reviewsMsgChan)
 	}()
 
 	for {

@@ -77,18 +77,18 @@ func (p PlatformCounter) middlewareCounterInit() error {
 		return err
 	}
 
-	qName, err := p.middleware.DeclareTemporaryQueue(communication)
+	qName, err := p.middleware.DeclareTemporaryQueue(control)
 	if err != nil {
 		return err
 	}
 	p.endOfGamesQueue = qName
 
-	err = p.middleware.DeclareExchange(communication, "end_of_games", "fanout")
+	err = p.middleware.DeclareExchange(control, "eof", "topic")
 	if err != nil {
 		return err
 	}
 
-	err = p.middleware.BindQueueToExchange(communication, "end_of_games", p.endOfGamesQueue, "")
+	err = p.middleware.BindQueueToExchange(control, "eof", p.endOfGamesQueue, "games")
 	if err != nil {
 		return err
 	}
@@ -114,25 +114,39 @@ func (p *PlatformCounter) Start() {
 	go p.signalListener()
 
 	msgChan := make(chan middleware.MsgResponse)
-	go p.middleware.ConsumeAndProcess(communication, games_to_count, msgChan)
+	go p.middleware.ConsumeFromQueue(communication, games_to_count, msgChan)
+
+	eofChan := make(chan middleware.MsgResponse)
+	go p.middleware.ConsumeFromQueue(control, p.endOfGamesQueue, eofChan)
+
 	for {
 		select {
 		case <-p.middleware.Ctx.Done():
 			return
 		case result := <-msgChan:
 			msg := result.Msg.Body
+			err := p.countGames(msg)
+			if err != nil {
+				result.Msg.Nack(false, true)
+			} else {
+				result.Msg.Ack(false)
+			}
+		case result := <-eofChan:
+			if result.MsgError != nil {
+				log.Errorf("Error consuming message from eof chan: %v", result.MsgError)
+				continue
+			}
+
+			err := p.sendResults()
+			if err != nil {
+				result.Msg.Nack(false, true)
+				log.Error("Error sending results: %v", err)
+				continue
+			}
 			result.Msg.Ack(false)
-			p.countGames(msg)
+			p.count.Restart()
 		}
 	}
-}
-
-func (p *PlatformCounter) endCounting(msg []byte, finished *bool) error {
-	log.Info("MESSAGE ON QUEUE 2", string(msg))
-	if string(msg) == "EOF" {
-		*finished = true
-	}
-	return nil
 }
 
 func (p *PlatformCounter) countGames(msg []byte) error {

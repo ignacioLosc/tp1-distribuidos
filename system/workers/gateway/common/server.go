@@ -2,15 +2,12 @@ package common
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"example.com/system/communication/middleware"
 	mw "example.com/system/communication/middleware"
-	"example.com/system/communication/protocol"
 	"example.com/system/communication/utils"
 	"github.com/op/go-logging"
 )
@@ -98,8 +95,11 @@ func middlewareGatewayInit() (*mw.Middleware, error) {
 	middleware.DeclareDirectQueue(communication, games_to_filter)
 	middleware.DeclareDirectQueue(communication, "reviews")
 
+	middleware.DeclareExchange(control, "eof", "topic")
+
+	middleware.DeclareDirectQueue(communication, "reviews")
+
 	middleware.DeclareExchange(communication, "results", "direct")
-	middleware.DeclareExchange(communication, "end_of_games", "fanout")
 	middleware.DeclareDirectQueue(communication, "query_results")
 
 	middleware.BindQueueToExchange(communication, "results", "query_results", "query1")
@@ -111,92 +111,6 @@ func middlewareGatewayInit() (*mw.Middleware, error) {
 	return middleware, nil
 }
 
-func (s *Server) receiveMessage(conn net.Conn, channel chan []byte) error {
-	resultChan := make(chan utils.StringResult)
-	for {
-		go utils.DeserealizeString(conn, resultChan)
-		select {
-		case <-s.middleware.Ctx.Done():
-			log.Infof("action: [receive] | result: fail | err: context cancelled")
-			return nil
-		case result := <-resultChan:
-			if result.Error != nil {
-				return result.Error
-			}
-
-			channel <- result.Message
-
-			if string(result.Message) == "EOF" {
-				return nil
-			}
-		}
-	}
-}
-
-func (s *Server) waitForResults(conn net.Conn) error {
-	msgChan := make(chan middleware.MsgResponse)
-	go s.middleware.ConsumeExchange(communication, "query_results", msgChan)
-	for {
-		select {
-		case <-s.middleware.Ctx.Done():
-			log.Infof("waitForResults returning")
-			return nil
-
-		case result := <-msgChan:
-			stringResult := ""
-			msg := result.Msg.Body
-			result.Msg.Ack(false)
-			switch result.Msg.RoutingKey {
-			case "query1":
-				counter, err := protocol.DeserializeCounter(msg)
-				if err != nil {
-					return fmt.Errorf("failed to deserialize counter: %w.", err)
-				}
-				log.Info("Received results for query 1", counter)
-				stringResult = fmt.Sprintf("QUERY 1 RESULTS: Windows: %d, Linux: %d, Mac: %d", counter.Windows, counter.Linux, counter.Mac)
-				break
-			case "query2":
-				log.Info("Received results for query 2")
-				gameNames := getGameNames(msg)
-				stringResult = fmt.Sprintf("QUERY 2 RESULTS: ")
-				stringResult = formatGameNames(stringResult, gameNames)
-				break
-			case "query3":
-				log.Info("Received results for query 3")
-				gameNames := getGameReviewCountNames(msg)
-				stringResult = fmt.Sprintf("QUERY 3 RESULTS: ")
-				stringResult = formatGameNames(stringResult, gameNames)
-				break
-			case "query4":
-				log.Info("Received results for query 4")
-				gameNames := getGameReviewCountNames(msg)
-				stringResult = fmt.Sprintf("QUERY 4 RESULTS: ")
-				stringResult = formatGameNames(stringResult, gameNames)
-				break
-			case "query5":
-				log.Info("Received results for query 5")
-				gameNames := getGameReviewCountNames(msg)
-				stringResult = fmt.Sprintf("QUERY 5 RESULTS: ")
-				stringResult = formatGameNames(stringResult, gameNames)
-				break
-			default:
-				log.Errorf("invalid routing key")
-			}
-
-			data, err := utils.SerializeString(stringResult)
-			if err != nil {
-				return fmt.Errorf("failed to serialize data: %w.", err)
-			}
-
-			err = utils.SendAll(conn, data)
-			if err != nil {
-				return fmt.Errorf("failed to write data: %w.", err)
-			}
-
-			return nil
-		}
-	}
-}
 
 type NetConnResponse struct {
 	Conn  net.Conn
@@ -264,6 +178,28 @@ func (s *Server) receiveDatasets(conn net.Conn) {
 	log.Infof("action: receiving_reviews | result: success")
 }
 
+func (s *Server) receiveMessage(conn net.Conn, channel chan []byte) error {
+	resultChan := make(chan utils.StringResult)
+	for {
+		go utils.DeserealizeString(conn, resultChan)
+		select {
+		case <-s.middleware.Ctx.Done():
+			log.Infof("action: [receive] | result: fail | err: context cancelled")
+			return nil
+		case result := <-resultChan:
+			if result.Error != nil {
+				return result.Error
+			}
+
+			channel <- result.Message
+
+			if string(result.Message) == "EOF" {
+				return nil
+			}
+		}
+	}
+}
+
 func (s *Server) listenOnChannels() {
 	for {
 		select {
@@ -273,6 +209,13 @@ func (s *Server) listenOnChannels() {
 		case games := <-s.gamesChan:
 			s.middleware.PublishInQueue(communication, "games_to_filter", games)
 			if string(games) == "EOF" {
+				// err := s.middleware.PublishInExchange(control, "eof", "games", []byte("EOF"))
+				// if err != nil {
+				// 	log.Errorf("games Error sending EOF: %v", err)
+				// } else {
+				// 	log.Infof("games EOF sent")
+				// }
+
 				for i := 0; i < s.config.NumCounters; i++ {
 					s.middleware.PublishInQueue(communication, "games_to_count", []byte("EOF"))
 				}

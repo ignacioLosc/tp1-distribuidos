@@ -103,7 +103,7 @@ func (p *Sorter) Start() {
 	go p.signalListener()
 
 	msgChan := make(chan middleware.MsgResponse)
-	go p.middleware.ConsumeAndProcess(communication, joined_reviews_indies, msgChan)
+	go p.middleware.ConsumeFromQueue(communication, joined_reviews_indies, msgChan)
 	for {
 		select {
 		case <-p.middleware.Ctx.Done():

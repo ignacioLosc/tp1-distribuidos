@@ -201,7 +201,7 @@ func (m *Middleware) PublishInQueue(channelName string, queueName string, messag
 	return nil
 }
 
-func (m *Middleware) ConsumeAndProcess(channelName string, queueName string, msgChan chan MsgResponse) {
+func (m *Middleware) ConsumeFromQueue(channelName string, queueName string, msgChan chan MsgResponse) {
 	ch, ok := m.channels[channelName]
 	if !ok {
 		return
@@ -226,6 +226,7 @@ func (m *Middleware) ConsumeAndProcess(channelName string, queueName string, msg
 	for {
 		d, ok := <-msgs
 		if !ok {
+			log.Errorf("Error (!ok) consuming message: %s", err)
 			d.Nack(false, false)
 			msgChan <- MsgResponse{amqp.Delivery{}, errors.New(fmt.Sprintf("There was an error consuming a message from the %s queue", queueName))}
 			return

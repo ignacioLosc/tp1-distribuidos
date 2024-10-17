@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"example.com/system/communication/protocol"
 	"example.com/system/communication/utils"
@@ -45,6 +46,7 @@ func NewClient(config ClientConfig) (*Client, error) {
 }
 
 func (c *Client) Start() {
+	time.Sleep(15 * time.Second)
 	defer c.conn.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
