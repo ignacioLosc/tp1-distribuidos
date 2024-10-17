@@ -195,7 +195,7 @@ func (m *Middleware) PublishInQueue(channelName string, queueName string, messag
 		})
 
 	if err != nil {
-		log.Fatalf("Error publishing message: %s", err)
+		log.Fatalf("Error publishing message in queue %s and channel %s: %s", queueName, channelName, err)
 	}
 
 	return nil

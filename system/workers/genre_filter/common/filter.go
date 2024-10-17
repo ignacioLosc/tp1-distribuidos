@@ -107,8 +107,12 @@ func (p *GenreFilter) Start() {
 			return
 		case result := <-msgChan:
 			msg := result.Msg.Body
-			result.Msg.Ack(false)
-			p.filterGames(msg)
+			err := p.filterGames(msg)
+			if err != nil {
+				result.Msg.Nack(false, false)
+			} else {
+				result.Msg.Ack(false)
+			}
 		}
 	}
 }

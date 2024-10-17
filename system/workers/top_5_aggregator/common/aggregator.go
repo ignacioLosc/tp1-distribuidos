@@ -114,8 +114,12 @@ func (p *Aggregator) Start() {
 			return
 		case result := <-msgChan:
 			msg := result.Msg.Body
-			result.Msg.Ack(false)
-			p.aggregateGames(msg)
+			err := p.aggregateGames(msg)
+			if err != nil {
+				result.Msg.Nack(false, false)
+			} else {
+				result.Msg.Ack(false)
+			}
 		}
 
 	}

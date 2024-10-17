@@ -122,8 +122,12 @@ func (p *Sorter) Start() {
 			return
 		case result := <-msgChan:
 			msg := result.Msg.Body
-			result.Msg.Ack(false)
-			p.sortGames(msg)
+			err := p.sortGames(msg)
+			if err != nil {
+				result.Msg.Nack(false, false)
+			} else {
+				result.Msg.Ack(false)
+			}
 		}
 
 	}

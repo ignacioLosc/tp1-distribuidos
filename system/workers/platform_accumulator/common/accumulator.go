@@ -114,8 +114,12 @@ func (p *PlatformAccumulator) Start() {
 			return
 		case result := <-msgChan:
 			msg := result.Msg.Body
-			result.Msg.Ack(false)
-			p.countGames(msg)
+			err := p.countGames(msg)
+			if err != nil {
+				result.Msg.Nack(false, false)
+			} else {
+				result.Msg.Ack(false)
+			}
 		}
 
 	}

@@ -39,7 +39,7 @@ type Joiner struct {
 	gamesQueue            string
 	reviewsQueue          string
 	savedGameReviewCounts map[string]protocol.GameReviewCount
-	finishedMappers	   	  int
+	finishedMappers       int
 }
 
 func NewJoiner(config JoinerConfig) (*Joiner, error) {
@@ -166,13 +166,21 @@ func (j *Joiner) Start() {
 
 		case gameResult := <-gamesMsgChan:
 			msg := gameResult.Msg.Body
-			gameResult.Msg.Ack(false)
-			j.saveGames(msg, gamesEOFChan)
+			err := j.saveGames(msg, gamesEOFChan)
+			if err != nil {
+				gameResult.Msg.Nack(false, false)
+			} else {
+				gameResult.Msg.Ack(false)
+			}
 
 		case reviewResult := <-reviewsMsgChan:
 			msg := reviewResult.Msg.Body
-			reviewResult.Msg.Ack(false)
-			j.joinReviewsAndGames(msg)
+			err := j.joinReviewsAndGames(msg)
+			if err != nil {
+				reviewResult.Msg.Nack(false, false)
+			} else {
+				reviewResult.Msg.Ack(false)
+			}
 		}
 	}
 }
