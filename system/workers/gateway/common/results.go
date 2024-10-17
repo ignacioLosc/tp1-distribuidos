@@ -9,7 +9,6 @@ import (
 	"example.com/system/communication/utils"
 )
 
-
 func (s *Server) waitForResults(conn net.Conn) error {
 	msgChan := make(chan middleware.MsgResponse)
 	go s.middleware.ConsumeExchange(communication, "query_results", msgChan)
@@ -57,7 +56,7 @@ func (s *Server) waitForResults(conn net.Conn) error {
 				stringResult = formatGameNames(stringResult, gameNames)
 				break
 			default:
-				log.Errorf("invalid routing key")
+				log.Errorf("invalid routing key: %s", result.Msg.RoutingKey)
 			}
 
 			data, err := utils.SerializeString(stringResult)
@@ -69,8 +68,6 @@ func (s *Server) waitForResults(conn net.Conn) error {
 			if err != nil {
 				return fmt.Errorf("failed to write data: %w.", err)
 			}
-
-			return nil
 		}
 	}
 }
