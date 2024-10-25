@@ -34,12 +34,13 @@ type JoinerConfig struct {
 }
 
 type Joiner struct {
-	middleware            *middleware.Middleware
-	config                JoinerConfig
-	gamesQueue            string
-	reviewsQueue          string
-	savedGameReviewCounts map[string]protocol.GameReviewCount
-	finishedMappers       int
+	middleware               *middleware.Middleware
+	config                   JoinerConfig
+	gamesQueue               string
+	reviewsQueue             string
+	savedGameReviewCountsMap map[string]map[string]protocol.GameReviewCount
+	finishedMappers          map[string]int
+	readyForReviews		     map[string]bool
 }
 
 func NewJoiner(config JoinerConfig) (*Joiner, error) {
@@ -51,9 +52,11 @@ func NewJoiner(config JoinerConfig) (*Joiner, error) {
 	}
 
 	joiner := &Joiner{
-		config:                config,
-		middleware:            middleware,
-		savedGameReviewCounts: make(map[string]protocol.GameReviewCount),
+		config:                   config,
+		middleware:               middleware,
+		savedGameReviewCountsMap: make(map[string]map[string]protocol.GameReviewCount),
+		finishedMappers:          make(map[string]int),
+		readyForReviews:          make(map[string]bool),
 	}
 
 	err = joiner.middlewareInit()
@@ -148,17 +151,13 @@ func (j *Joiner) Start() {
 
 	go j.signalListener()
 
-	gamesEOFChan := make(chan bool)
-
 	gamesMsgChan := make(chan middleware.MsgResponse)
 	go j.middleware.ConsumeFromQueue(communication, j.gamesQueue, gamesMsgChan)
 
 	reviewsMsgChan := make(chan middleware.MsgResponse)
-	go func() {
-		<-gamesEOFChan
-		j.middleware.ConsumeFromQueue(communication, j.reviewsQueue, reviewsMsgChan)
-	}()
-
+	go j.middleware.ConsumeFromQueue(communication, j.reviewsQueue, reviewsMsgChan)
+	
+	log.Info("Joiner started listening")
 	for {
 		select {
 		case <-j.middleware.Ctx.Done():
@@ -166,7 +165,8 @@ func (j *Joiner) Start() {
 
 		case gameResult := <-gamesMsgChan:
 			msg := gameResult.Msg.Body
-			err := j.saveGames(msg, gamesEOFChan)
+			clientId := gameResult.Msg.Headers["clientId"].(string)
+			err := j.saveGames(msg, clientId)
 			if err != nil {
 				gameResult.Msg.Nack(false, false)
 			} else {
@@ -175,7 +175,15 @@ func (j *Joiner) Start() {
 
 		case reviewResult := <-reviewsMsgChan:
 			msg := reviewResult.Msg.Body
-			err := j.joinReviewsAndGames(msg)
+			clientId := reviewResult.Msg.Headers["clientId"].(string)
+
+			if !j.readyForReviews[clientId] {
+				log.Info("client not ready bro")
+				reviewResult.Msg.Nack(false, true)
+				continue
+			}
+
+			err := j.joinReviewsAndGames(msg, clientId)
 			if err != nil {
 				reviewResult.Msg.Nack(false, false)
 			} else {
@@ -185,8 +193,8 @@ func (j *Joiner) Start() {
 	}
 }
 
-func (j *Joiner) sendJoinedResults() {
-	for appId, gameReviewCount := range j.savedGameReviewCounts {
+func (j *Joiner) sendJoinedResults(clientId string) {
+	for appId, gameReviewCount := range j.savedGameReviewCountsMap[clientId] {
 		if j.config.Genre == "Indie" {
 			err := j.middleware.PublishInQueue(communication, indies_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
 			if err != nil {
@@ -207,7 +215,7 @@ func (j *Joiner) sendJoinedResults() {
 			}
 		}
 
-		delete(j.savedGameReviewCounts, appId)
+		delete(j.savedGameReviewCountsMap[clientId], appId)
 	}
 
 	err := j.middleware.PublishInQueue(communication, shooter_negative_joined_queue, []byte("EOF"))
@@ -226,10 +234,10 @@ func (j *Joiner) sendJoinedResults() {
 	}
 }
 
-func (p *Joiner) saveGames(msg []byte, gamesEOFChan chan bool) error {
+func (p *Joiner) saveGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
 		log.Info("Joiner finished reading games")
-		gamesEOFChan <- true
+		p.readyForReviews[clientId] = true
 		return nil
 	}
 
@@ -238,7 +246,12 @@ func (p *Joiner) saveGames(msg []byte, gamesEOFChan chan bool) error {
 		return fmt.Errorf("Error deserializing game: %s", err)
 	}
 
-	p.savedGameReviewCounts[game.AppID] = protocol.GameReviewCount{
+	_, ok := p.savedGameReviewCountsMap[clientId]
+	if !ok {
+		p.savedGameReviewCountsMap[clientId] = make(map[string]protocol.GameReviewCount)
+	}
+
+	p.savedGameReviewCountsMap[clientId][game.AppID] = protocol.GameReviewCount{
 		AppName:                    game.Name,
 		PositiveReviewCount:        0,
 		NegativeReviewCount:        0,
@@ -248,12 +261,11 @@ func (p *Joiner) saveGames(msg []byte, gamesEOFChan chan bool) error {
 	return nil
 }
 
-func (p *Joiner) joinReviewsAndGames(msg []byte) error {
+func (p *Joiner) joinReviewsAndGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
-		p.finishedMappers++
-
-		if p.finishedMappers == 10 {
-			p.sendJoinedResults()
+		p.finishedMappers[clientId] = p.finishedMappers[clientId] + 1
+		if p.finishedMappers[clientId] == 10 {
+			p.sendJoinedResults(clientId)
 			log.Info("Joiner finished reading games and reviews")
 		}
 
@@ -265,7 +277,7 @@ func (p *Joiner) joinReviewsAndGames(msg []byte) error {
 		return fmt.Errorf("Error deserializing review: %s", err)
 	}
 
-	gameReviewCount, ok := p.savedGameReviewCounts[mappedReview.AppID]
+	gameReviewCount, ok := p.savedGameReviewCountsMap[clientId][mappedReview.AppID]
 	if !ok {
 		return nil
 	}
@@ -280,6 +292,6 @@ func (p *Joiner) joinReviewsAndGames(msg []byte) error {
 		gameReviewCount.PositiveEnglishReviewCount++
 	}
 
-	p.savedGameReviewCounts[mappedReview.AppID] = gameReviewCount
+	p.savedGameReviewCountsMap[clientId][mappedReview.AppID] = gameReviewCount
 	return nil
 }

@@ -107,7 +107,9 @@ func (p *GenreFilter) Start() {
 			return
 		case result := <-msgChan:
 			msg := result.Msg.Body
-			err := p.filterGames(msg)
+			clientId := result.Msg.Headers["clientId"].(string)
+
+			err := p.filterGames(msg, clientId)
 			if err != nil {
 				result.Msg.Nack(false, false)
 			} else {
@@ -148,7 +150,7 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 	return nil
 }
 
-func (p *GenreFilter) filterGames(msg []byte) error {
+func (p *GenreFilter) filterGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
 		err := p.middleware.PublishInExchange(communication, filtered_games, "shooter.*.0", []byte("EOF"))
 		if err != nil {

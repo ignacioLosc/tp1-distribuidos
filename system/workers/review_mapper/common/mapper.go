@@ -118,7 +118,8 @@ func (p *ReviewMapper) Start() {
 			return
 		case result := <-msgChan:
 			msg := result.Msg.Body
-			err := p.mapReviews(msg)
+			clientId := result.Msg.Headers["clientId"].(string)
+			err := p.mapReviews(msg, clientId)
 			if err != nil {
 				result.Msg.Nack(false, false)
 			} else {
@@ -152,7 +153,7 @@ func (p *ReviewMapper) mapReview(review protocol.Review) protocol.MappedReview {
 	// return protocol.MappedReview{AppID: review.AppID, IsPositive: isPositive, IsNegative: !isPositive, IsPositiveEnglish: true}
 }
 
-func (p *ReviewMapper) mapReviews(msg []byte) error {
+func (p *ReviewMapper) mapReviews(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
 		log.Info("Received EOF. Stopping")
 		p.sendEOF()
