@@ -175,6 +175,9 @@ func (m *Middleware) PublishInExchange(channelName string, exchangeName string, 
 		amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        message,
+			Headers:    amqp.Table{
+				"clientId": "33",
+			},
 		})
 }
 
@@ -192,6 +195,9 @@ func (m *Middleware) PublishInQueue(channelName string, queueName string, messag
 		amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        message,
+			Headers:    amqp.Table{
+				"clientId": "33",
+			},
 		})
 
 	if err != nil {

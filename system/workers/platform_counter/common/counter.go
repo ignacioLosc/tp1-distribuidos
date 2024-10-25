@@ -30,7 +30,8 @@ type PlatformCounterConfig struct {
 type PlatformCounter struct {
 	config          PlatformCounterConfig
 	middleware      *mw.Middleware
-	count           prot.PlatformCount
+	countMap		map[string]prot.PlatformCount
+	finishedMap		map[string]bool
 	endOfGamesQueue string
 }
 
@@ -43,8 +44,9 @@ func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error) 
 
 	platformCounter := &PlatformCounter{
 		config:     config,
-		count:      prot.PlatformCount{},
 		middleware: middleware,
+		countMap: make(map[string]prot.PlatformCount),
+		finishedMap: make(map[string]bool),
 	}
 
 	err = platformCounter.middlewareCounterInit()
@@ -116,54 +118,46 @@ func (p *PlatformCounter) Start() {
 	msgChan := make(chan middleware.MsgResponse)
 	go p.middleware.ConsumeFromQueue(communication, games_to_count, msgChan)
 
-	eofChan := make(chan middleware.MsgResponse)
-	go p.middleware.ConsumeFromQueue(control, p.endOfGamesQueue, eofChan)
-
 	for {
 		select {
 		case <-p.middleware.Ctx.Done():
 			return
 		case result := <-msgChan:
+			clientId := result.Msg.Headers["clientId"].(string)
 			msg := result.Msg.Body
-			err := p.countGames(msg)
+
+			if p.finishedMap[clientId] {
+				log.Errorf("Client %s already finished", clientId)
+				result.Msg.Nack(false, true)
+				continue
+			}
+
+			err := p.countGames(msg, clientId)
 			if err != nil {
 				result.Msg.Nack(false, true)
 			} else {
 				result.Msg.Ack(false)
 			}
-		case result := <-eofChan:
-			if result.MsgError != nil {
-				log.Errorf("Error consuming message from eof chan: %v", result.MsgError)
-				continue
-			}
-
-			err := p.sendResults()
-			if err != nil {
-				result.Msg.Nack(false, true)
-				log.Error("Error sending results: %v", err)
-				continue
-			}
-			result.Msg.Ack(false)
-			p.count.Restart()
 		}
 	}
 }
 
-func (p *PlatformCounter) countGames(msg []byte) error {
+func (p *PlatformCounter) countGames(msg []byte, clientId string) error {
+	counter := p.countMap[clientId]
+
 	if string(msg) == "EOF" {
-		err := p.sendResults()
+		err := p.sendResults(clientId)
 		if err != nil {
 			log.Error("Error sending results: %v", err)
 			return err
 		}
-		p.count.Windows = 0
-		p.count.Linux = 0
-		p.count.Mac = 0
+
+		p.finishedMap[clientId] = true
+		p.countMap[clientId] = prot.PlatformCount{}
 		return nil
 	}
 
 	lenGames := binary.BigEndian.Uint64(msg[:8])
-	games := make([]protocol.Game, 0)
 
 	index := 8
 	for i := 0; i < int(lenGames); i++ {
@@ -174,22 +168,20 @@ func (p *PlatformCounter) countGames(msg []byte) error {
 			continue
 		}
 
-		games = append(games, game)
+		counter.Increment(game.WindowsCompatible, game.LinuxCompatible, game.MacCompatible)
 		index += j
 	}
 
-	for _, game := range games {
-		p.count.Increment(game.WindowsCompatible, game.LinuxCompatible, game.MacCompatible)
-	}
-
-	log.Debugf("Platform Counter: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
+	p.countMap[clientId] = counter
 
 	return nil
 }
 
-func (p *PlatformCounter) sendResults() error {
-	log.Debugf("Platform final: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
-	err := p.middleware.PublishInQueue(communication, count_acumulator, p.count.Serialize())
+func (p *PlatformCounter) sendResults(clientId string) error {
+	counter := p.countMap[clientId]
+	log.Infof("Results for client ", counter)
+
+	err := p.middleware.PublishInQueue(communication, count_acumulator, counter.Serialize())
 	if err != nil {
 		return err
 	}

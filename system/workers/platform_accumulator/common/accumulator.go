@@ -31,9 +31,9 @@ type PlatformAccumulatorConfig struct {
 type PlatformAccumulator struct {
 	config     PlatformAccumulatorConfig
 	middleware *mw.Middleware
-	count      prot.PlatformCount
+	countMap   map[string]prot.PlatformCount
+	finishedMap map[string]int
 	stop       chan bool
-	finished   int
 }
 
 func NewPlatformAccumulator(config PlatformAccumulatorConfig) (*PlatformAccumulator, error) {
@@ -46,9 +46,9 @@ func NewPlatformAccumulator(config PlatformAccumulatorConfig) (*PlatformAccumula
 	platformCounter := &PlatformAccumulator{
 		config:     config,
 		stop:       make(chan bool),
-		count:      prot.PlatformCount{},
+		countMap:   make(map[string]prot.PlatformCount),
 		middleware: middleware,
-		finished:   0,
+		finishedMap:  make(map[string]int),
 	}
 
 	err = platformCounter.middlewareAccumulatorInit()
@@ -113,8 +113,10 @@ func (p *PlatformAccumulator) Start() {
 		case <-p.middleware.Ctx.Done():
 			return
 		case result := <-msgChan:
+			clientId := result.Msg.Headers["clientId"].(string)
+
 			msg := result.Msg.Body
-			err := p.countGames(msg)
+			err := p.countGames(msg, clientId)
 			if err != nil {
 				result.Msg.Nack(false, false)
 			} else {
@@ -125,15 +127,15 @@ func (p *PlatformAccumulator) Start() {
 	}
 }
 
-func (p *PlatformAccumulator) countGames(msg []byte) error {
+func (p *PlatformAccumulator) countGames(msg []byte, clientId string) error {
+	counterAccu := p.countMap[clientId]
+
 	if string(msg) == "EOF" {
-		p.finished += 1
-		if p.finished == p.config.NumCounters {
-			log.Infof("Resultado FINAL: Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
-			p.middleware.PublishInExchange(communication, results_exchange, query_key, p.count.Serialize())
-			p.count.Linux = 0
-			p.count.Mac = 0
-			p.count.Windows = 0
+		p.finishedMap[clientId] = p.finishedMap[clientId] + 1
+		if p.finishedMap[clientId] == p.config.NumCounters {
+			log.Infof("Resultado FINAL: %d Windows: %d, Linux: %d, Mac: %d", p.finishedMap[clientId], counterAccu.Windows, counterAccu.Linux, counterAccu.Mac)
+			p.middleware.PublishInExchange(communication, results_exchange, query_key, counterAccu.Serialize())
+			p.countMap[clientId] = prot.PlatformCount{}
 		}
 		return nil
 	}
@@ -143,9 +145,10 @@ func (p *PlatformAccumulator) countGames(msg []byte) error {
 		log.Errorf("Error deserializing counter: %v :", err, msg)
 		return err
 	}
-	p.count.IncrementVals(counter.Windows, counter.Linux, counter.Mac)
+	counterAccu.IncrementVals(counter.Windows, counter.Linux, counter.Mac)
+	p.countMap[clientId] = counterAccu
 
-	log.Debugf("Counter Resultado PARCIAL : Windows: %d, Linux: %d, Mac: %d", p.count.Windows, p.count.Linux, p.count.Mac)
+	log.Debugf("Counter Resultado PARCIAL : Windows: %d, Linux: %d, Mac: %d", counterAccu.Windows, counterAccu.Linux, counterAccu.Mac)
 
 	return nil
 }

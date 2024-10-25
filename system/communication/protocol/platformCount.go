@@ -15,7 +15,7 @@ func (c *PlatformCount) Restart() {
 	c.Windows = 0
 	c.Linux = 0
 	c.Mac = 0
-	return 
+	return
 }
 
 func (c *PlatformCount) Serialize() []byte {
