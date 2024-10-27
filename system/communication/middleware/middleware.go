@@ -33,14 +33,13 @@ func connectRabbitMQ(retries int) (*amqp.Connection, error) {
 	var conn *amqp.Connection
 	var err error
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < retries; i++ {
 		conn, err = amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
 		if err == nil {
 			break
 		}
 
 		delay := (5 + time.Duration(math.Pow(2, float64(i)))) * time.Second
-		log.Errorf("Retry %d/%d failed: %v. Retrying in %v...", i+1, retries, err, delay)
 		time.Sleep(delay)
 	}
 

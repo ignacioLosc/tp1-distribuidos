@@ -10,7 +10,6 @@ import (
 
 	"example.com/system/communication/middleware"
 	"example.com/system/communication/protocol"
-	prot "example.com/system/communication/protocol"
 	"github.com/op/go-logging"
 )
 
@@ -32,11 +31,11 @@ type PercentileCalculatorConfig struct {
 }
 
 type PercentileCalculator struct {
-	middleware *middleware.Middleware
-	config     PercentileCalculatorConfig
-	stop       chan bool
-	games      []protocol.GameReviewCount
-	finished   int
+	middleware    *middleware.Middleware
+	config        PercentileCalculatorConfig
+	stop          chan bool
+	gamesSavedMap map[string][]protocol.GameReviewCount
+	finishedMap   map[string]int
 }
 
 func NewPercentileCalculator(config PercentileCalculatorConfig) (*PercentileCalculator, error) {
@@ -47,10 +46,10 @@ func NewPercentileCalculator(config PercentileCalculatorConfig) (*PercentileCalc
 		return nil, err
 	}
 	controller := &PercentileCalculator{
-		config:     config,
-		middleware: middleware,
-		games:      make([]prot.GameReviewCount, 0),
-		finished:   0,
+		config:        config,
+		middleware:    middleware,
+		gamesSavedMap: make(map[string][]protocol.GameReviewCount),
+		finishedMap:   make(map[string]int),
 	}
 
 	err = controller.middlewareInit()
@@ -100,7 +99,6 @@ func (c *PercentileCalculator) signalListener() {
 }
 
 func (p *PercentileCalculator) Start() {
-	log.Info("Starting game 5k reviews")
 	defer p.Close()
 
 	go p.signalListener()
@@ -113,8 +111,15 @@ func (p *PercentileCalculator) Start() {
 			log.Info("Received sigterm")
 			return
 		case result := <-msgChan:
+			if result.MsgError != nil {
+				log.Errorf("Error consuming message", result.MsgError)
+				continue
+			}
+
 			msg := result.Msg.Body
-			err := p.accumulateGames(msg)
+			clientId := result.Msg.Headers["clientId"].(string)
+
+			err := p.accumulateGames(msg, clientId)
 			if err != nil {
 				result.Msg.Nack(false, false)
 			} else {
@@ -125,24 +130,27 @@ func (p *PercentileCalculator) Start() {
 	}
 }
 
-func (p *PercentileCalculator) calculatePercentile() {
-	sort.Slice(p.games, func(i, j int) bool {
-		return p.games[i].NegativeReviewCount < p.games[j].NegativeReviewCount
+func (p *PercentileCalculator) calculatePercentile(clientId string) {
+	games := p.gamesSavedMap[clientId]
+
+	sort.Slice(games, func(i, j int) bool {
+		return games[i].NegativeReviewCount < games[j].NegativeReviewCount
 	})
-	percentileIndex := len(p.games) * 9 / 10
-	threshold := p.games[percentileIndex].PositiveReviewCount
+	percentileIndex := len(games) * 9 / 10
+	threshold := games[percentileIndex].PositiveReviewCount
 
 	topGames := make([]protocol.GameReviewCount, 0)
 
-	for _, game := range p.games {
+	for _, game := range games {
 		if game.PositiveReviewCount >= threshold {
 			topGames = append(topGames, game)
 		}
 	}
-	p.sendGames(topGames)
+
+	p.sendGames(topGames, clientId)
 }
 
-func (p *PercentileCalculator) sendGames(games []protocol.GameReviewCount) {
+func (p *PercentileCalculator) sendGames(games []protocol.GameReviewCount, clientId string) {
 	gamesBuffer := make([]byte, 8)
 	l := len(games)
 	binary.BigEndian.PutUint64(gamesBuffer, uint64(l))
@@ -151,19 +159,23 @@ func (p *PercentileCalculator) sendGames(games []protocol.GameReviewCount) {
 		gameBuffer := protocol.SerializeGameReviewCount(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
+
 	p.middleware.PublishInExchange(communication, results_exchange, query_key, gamesBuffer)
 }
 
-func (p *PercentileCalculator) accumulateGames(msg []byte) error {
+func (p *PercentileCalculator) accumulateGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
 		log.Info("Received EOF")
-		p.finished++
-		if p.finished == p.config.NumJoiners {
-			p.calculatePercentile()
-			p.finished = 0
+		p.finishedMap[clientId] = p.finishedMap[clientId] + 1
+		if p.finishedMap[clientId] == p.config.NumJoiners {
+			p.calculatePercentile(clientId)
+			p.finishedMap[clientId] = 0
+			delete(p.gamesSavedMap, clientId)
 		}
 		return nil
 	}
+
+	games := p.gamesSavedMap[clientId]
 
 	game, err, _ := protocol.DeserializeGameReviewCount(msg)
 	if err != nil {
@@ -171,7 +183,8 @@ func (p *PercentileCalculator) accumulateGames(msg []byte) error {
 		return err
 	}
 
-	p.games = append(p.games, game)
+	p.gamesSavedMap[clientId] = append(games, game)
+
 
 	return nil
 }

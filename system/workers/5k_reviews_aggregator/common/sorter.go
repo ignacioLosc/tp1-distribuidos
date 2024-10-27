@@ -33,8 +33,8 @@ type Aggregator struct {
 	middleware *middleware.Middleware
 	config     AggregatorConfig
 	stop       chan bool
-	finished   int
-	games      []protocol.GameReviewCount
+	finishedMap   map[string]int
+	gamesSavedMap map[string][]protocol.GameReviewCount
 }
 
 func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
@@ -47,8 +47,8 @@ func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
 	controller := &Aggregator{
 		config:     config,
 		middleware: middleware,
-		games:      make([]prot.GameReviewCount, 0),
-		finished:   0,
+		gamesSavedMap: make(map[string][]protocol.GameReviewCount),
+		finishedMap:   make(map[string]int),
 	}
 
 	err = controller.middlewareInit()
@@ -112,7 +112,9 @@ func (p *Aggregator) Start() {
 			return
 		case result := <-msgChan:
 			msg := result.Msg.Body
-			err := p.filterGames(msg)
+			clientId := result.Msg.Headers["clientId"].(string)
+
+			err := p.filterGames(msg, clientId)
 			if err != nil {
 				result.Msg.Nack(false, false)
 			} else {
@@ -128,12 +130,14 @@ type GameSummary struct {
 	AveragePlaytimeForever int
 }
 
-func (p *Aggregator) sendGames() {
+func (p *Aggregator) sendGames(clientId string) {
+	games := p.gamesSavedMap[clientId]
+
 	gamesBuffer := make([]byte, 8)
-	l := len(p.games)
+	l := len(games)
 	binary.BigEndian.PutUint64(gamesBuffer, uint64(l))
 
-	for _, game := range p.games {
+	for _, game := range games {
 		gameBuffer := protocol.SerializeGameReviewCount(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
@@ -148,12 +152,14 @@ func (p *Aggregator) shouldKeep(game prot.GameReviewCount) (bool, error) {
 	}
 }
 
-func (p *Aggregator) filterGames(msg []byte) error {
+func (p *Aggregator) filterGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
-		p.finished++
-		if p.finished == 5 {
-			p.sendGames()
-			p.finished = 0
+		p.finishedMap[clientId] = p.finishedMap[clientId] + 1
+		log.Infof("Finished map: %v", p.finishedMap[clientId])
+		if p.finishedMap[clientId] == 5 {
+			p.sendGames(clientId)
+			p.finishedMap[clientId] = 0
+			delete(p.gamesSavedMap, clientId)
 		}
 		return nil
 	}
@@ -170,8 +176,10 @@ func (p *Aggregator) filterGames(msg []byte) error {
 		return err
 	}
 	if shouldKeep {
+		games := p.gamesSavedMap[clientId]
 		log.Info("Keeping game:", game.AppName, game.PositiveReviewCount, game.NegativeReviewCount, game.PositiveEnglishReviewCount)
-		p.games = append(p.games, game)
+		games = append(games, game)
+		p.gamesSavedMap[clientId] = games
 	}
 
 	return nil

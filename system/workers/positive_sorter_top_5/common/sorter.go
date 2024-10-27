@@ -31,10 +31,12 @@ type SorterConfig struct {
 }
 
 type Sorter struct {
-	middleware *middleware.Middleware
-	config     SorterConfig
-	stop       chan bool
-	games      []protocol.GameReviewCount
+	middleware    *middleware.Middleware
+	config        SorterConfig
+	stop          chan bool
+	gamesSavedMap map[string][]prot.GameReviewCount
+	eofJoinersMap   map[string]int
+	finishedClients   map[string]bool
 }
 
 func NewSorter(config SorterConfig) (*Sorter, error) {
@@ -45,9 +47,11 @@ func NewSorter(config SorterConfig) (*Sorter, error) {
 		return nil, err
 	}
 	controller := &Sorter{
-		config:     config,
-		middleware: middleware,
-		games:      make([]prot.GameReviewCount, 0),
+		config:        config,
+		middleware:    middleware,
+		gamesSavedMap: make(map[string][]prot.GameReviewCount),
+		eofJoinersMap:   make(map[string]int),
+		finishedClients:   make(map[string]bool),
 	}
 
 	err = controller.middlewareInit()
@@ -111,7 +115,14 @@ func (p *Sorter) Start() {
 			return
 		case result := <-msgChan:
 			msg := result.Msg.Body
-			err := p.sortGames(msg)
+			clientId := result.Msg.Headers["clientId"].(string)
+
+			if p.finishedClients[clientId] {
+				result.Msg.Nack(false, true)
+				continue
+			}
+
+			err := p.sortGames(msg, clientId)
 			if err != nil {
 				result.Msg.Nack(false, false)
 			} else {
@@ -126,17 +137,22 @@ type GameSummary struct {
 	AveragePlaytimeForever int
 }
 
-func (p *Sorter) sendResults() {
+func (p *Sorter) sendResults(clientId string) {
 	log.Infof("Resultado PARCIAL sort y top %s:", p.config.Top)
-	for _, game := range p.games {
-		log.Infof("Name: %s, positiveReviewCount: %d", game.AppName, game.PositiveReviewCount)
+	games, ok := p.gamesSavedMap[clientId]
+	if !ok {
+		p.gamesSavedMap[clientId] = make([]prot.GameReviewCount, 0)
+	}
+
+	for _, game := range games {
+		log.Debugf("Name: %s, positiveReviewCount: %d", game.AppName, game.PositiveReviewCount)
 	}
 
 	gamesBuffer := make([]byte, 8)
-	l := len(p.games)
+	l := len(games)
 	binary.BigEndian.PutUint64(gamesBuffer, uint64(l))
 
-	for _, game := range p.games {
+	for _, game := range games {
 		gameBuffer := protocol.SerializeGameReviewCount(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
@@ -144,37 +160,54 @@ func (p *Sorter) sendResults() {
 	p.middleware.PublishInQueue(communication, top_5_partial_results, []byte("EOF"))
 }
 
-func (p *Sorter) shouldKeep(game prot.GameReviewCount, sortBy string, top int) (bool, error) {
+func (p *Sorter) shouldKeep(game prot.GameReviewCount, sortBy string, top int, clientId string) (bool, error) {
+	games, ok := p.gamesSavedMap[clientId]
+	if !ok {
+		p.gamesSavedMap[clientId] = make([]prot.GameReviewCount, 0)
+	}
+
 	if sortBy == "positiveReviewCount" {
-		if len(p.games) < top {
+		if len(games) < top {
 			return true, nil
-		} else if p.games[0].PositiveReviewCount < game.PositiveReviewCount {
+		} else if games[0].PositiveReviewCount < game.PositiveReviewCount {
 			return true, nil
 		} else {
-			log.Info("Discarding game %d, current lowest %d", game.PositiveReviewCount, p.games[0].PositiveReviewCount)
 			return false, nil
 		}
 	}
 	return false, nil
 }
 
-func (p *Sorter) saveGame(game prot.GameReviewCount, top int) error {
-	if len(p.games) < top {
-		p.games = append(p.games, game)
-	} else {
-		p.games = p.games[1:]
-		p.games = append(p.games, game)
+func (p *Sorter) saveGame(game prot.GameReviewCount, top int, clientId string) error {
+	games, ok := p.gamesSavedMap[clientId]
+	if !ok {
+		p.gamesSavedMap[clientId] = make([]prot.GameReviewCount, 0)
 	}
-	sort.Slice(p.games, func(i, j int) bool {
-		return p.games[i].PositiveReviewCount < p.games[j].PositiveReviewCount
+
+	if len(games) < top {
+		games = append(games, game)
+	} else {
+		games = games[1:]
+		games = append(games, game)
+	}
+	sort.Slice(games, func(i, j int) bool {
+		return games[i].PositiveReviewCount < games[j].PositiveReviewCount
 	})
+
+	p.gamesSavedMap[clientId] = games
 	return nil
 }
 
-func (p *Sorter) sortGames(msg []byte) error {
+func (p *Sorter) sortGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
-		log.Info("Received EOF")
-		p.sendResults()
+		p.eofJoinersMap[clientId] = p.eofJoinersMap[clientId] + 1
+		log.Info("Received EOF", p.eofJoinersMap[clientId])
+		if p.eofJoinersMap[clientId] == 5 {
+			p.sendResults(clientId)
+			p.eofJoinersMap[clientId] = 0
+			delete(p.gamesSavedMap, clientId)
+			p.finishedClients[clientId] = true
+		}
 		return nil
 	}
 
@@ -194,14 +227,15 @@ func (p *Sorter) sortGames(msg []byte) error {
 		return err
 	}
 
-	shouldKeep, err := p.shouldKeep(game, sortBy, top)
+	shouldKeep, err := p.shouldKeep(game, sortBy, top, clientId)
 	if err != nil {
 		log.Errorf("Error keeping games: ", err)
 		return err
 	}
+
 	if shouldKeep {
-		log.Info("Keeping game:", game.AppName, game.PositiveReviewCount, game.NegativeReviewCount, game.PositiveEnglishReviewCount)
-		p.saveGame(game, top)
+		log.Info("Keeping game: ", game.AppName, game.PositiveReviewCount, game.NegativeReviewCount, game.PositiveEnglishReviewCount)
+		p.saveGame(game, top, clientId)
 	}
 
 	return nil

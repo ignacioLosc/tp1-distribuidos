@@ -35,8 +35,8 @@ type Aggregator struct {
 	middleware    *middleware.Middleware
 	config        AggregatorConfig
 	stop          chan bool
-	games         []protocol.GameReviewCount
-	finishedCount int
+	gamesSavedMap map[string][]protocol.GameReviewCount
+	finishedCount map[string]int
 }
 
 func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
@@ -49,8 +49,8 @@ func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
 	controller := &Aggregator{
 		config:        config,
 		middleware:    middleware,
-		games:         make([]prot.GameReviewCount, 0),
-		finishedCount: 0,
+		gamesSavedMap: make(map[string][]protocol.GameReviewCount),
+		finishedCount: make(map[string]int),
 	}
 
 	err = controller.middlewareInit()
@@ -114,7 +114,9 @@ func (p *Aggregator) Start() {
 			return
 		case result := <-msgChan:
 			msg := result.Msg.Body
-			err := p.aggregateGames(msg)
+			clientId := result.Msg.Headers["clientId"].(string)
+
+			err := p.aggregateGames(msg, clientId)
 			if err != nil {
 				result.Msg.Nack(false, false)
 			} else {
@@ -130,58 +132,70 @@ type GameSummary struct {
 	AveragePlaytimeForever int
 }
 
-func (p *Aggregator) sendResults() {
+func (p *Aggregator) sendResults(clientId string) {
+	games := p.gamesSavedMap[clientId]
+
 	log.Infof("Resultado FINAL top 5:")
-	for _, game := range p.games {
+	for _, game := range games {
 		log.Infof("Name: %s, positiveReviewCount: %d", game.AppName, game.PositiveReviewCount)
 	}
 
 	gamesBuffer := make([]byte, 8)
-	l := len(p.games)
+	l := len(games)
 	binary.BigEndian.PutUint64(gamesBuffer, uint64(l))
 
-	for _, game := range p.games {
+	for _, game := range games {
 		gameBuffer := protocol.SerializeGameReviewCount(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
+
 	p.middleware.PublishInExchange(communication, results_exchange, query_key, gamesBuffer)
 }
 
-func (p *Aggregator) shouldKeep(game prot.GameReviewCount, top int) (bool, error) {
-	if len(p.games) < top {
+func (p *Aggregator) shouldKeep(game prot.GameReviewCount, top int, clientId string) (bool, error) {
+	games := p.gamesSavedMap[clientId]
+
+	if len(games) < top {
 		return true, nil
-	} else if p.games[0].PositiveReviewCount < game.PositiveReviewCount {
+	} else if games[0].PositiveReviewCount < game.PositiveReviewCount {
 		return true, nil
 	} else {
 		return false, nil
 	}
 }
 
-func (p *Aggregator) saveGame(game prot.GameReviewCount, top int) error {
-	if len(p.games) < top {
-		p.games = append(p.games, game)
+func (p *Aggregator) saveGame(game prot.GameReviewCount, top int, clientId string) error {
+	games := p.gamesSavedMap[clientId]
+
+	if len(games) < top {
+		games = append(games, game)
 	} else {
-		p.games = p.games[1:]
-		p.games = append(p.games, game)
+		games = games[1:]
+		games = append(games, game)
 	}
-	sort.Slice(p.games, func(i, j int) bool {
-		return p.games[i].PositiveReviewCount < p.games[j].PositiveReviewCount
+
+	sort.Slice(games, func(i, j int) bool {
+		return games[i].PositiveReviewCount < games[j].PositiveReviewCount
 	})
+
+	p.gamesSavedMap[clientId] = games
+
 	return nil
 }
 
-func (p *Aggregator) aggregateGames(msg []byte) error {
+func (p *Aggregator) aggregateGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
 		log.Info("Received EOF")
-		p.finishedCount++
+		p.finishedCount[clientId] = p.finishedCount[clientId] + 1
 		top, err := strconv.Atoi(p.config.Top)
 		if err != nil {
 			log.Errorf("Failed to parse top number", err)
 			return err
 		}
 
-		if p.finishedCount == top {
-			p.sendResults()
+		if p.finishedCount[clientId] == top {
+			p.sendResults(clientId)
+			p.finishedCount[clientId] = 0
 		}
 
 		return nil
@@ -202,14 +216,14 @@ func (p *Aggregator) aggregateGames(msg []byte) error {
 			return err
 		}
 
-		shouldKeep, err := p.shouldKeep(game, top)
+		shouldKeep, err := p.shouldKeep(game, top, clientId)
 		if err != nil {
 			log.Errorf("Error keeping games: ", err)
 			return err
 		}
 		if shouldKeep {
 			log.Info("Keeping game:", game.AppName, game.PositiveReviewCount, game.NegativeReviewCount, game.PositiveEnglishReviewCount)
-			p.saveGame(game, top)
+			p.saveGame(game, top, clientId)
 		}
 		index += j
 

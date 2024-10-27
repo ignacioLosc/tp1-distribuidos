@@ -75,5 +75,4 @@ func main() {
 	}
 
 	aggregator.Start()
-
 }

@@ -156,7 +156,7 @@ func (j *Joiner) Start() {
 
 	reviewsMsgChan := make(chan middleware.MsgResponse)
 	go j.middleware.ConsumeFromQueue(communication, j.reviewsQueue, reviewsMsgChan)
-	
+
 	log.Info("Joiner started listening")
 	for {
 		select {
@@ -178,7 +178,6 @@ func (j *Joiner) Start() {
 			clientId := reviewResult.Msg.Headers["clientId"].(string)
 
 			if !j.readyForReviews[clientId] {
-				log.Info("client not ready bro")
 				reviewResult.Msg.Nack(false, true)
 				continue
 			}
@@ -218,20 +217,25 @@ func (j *Joiner) sendJoinedResults(clientId string) {
 		delete(j.savedGameReviewCountsMap[clientId], appId)
 	}
 
-	err := j.middleware.PublishInQueue(communication, shooter_negative_joined_queue, []byte("EOF"))
-	if err != nil {
-		log.Errorf("Error publishing game review count to shooter negative joined queue: %s", err)
+	if j.config.Genre == "Indie" {
+		for i := 0; i < 5; i++ {
+			err := j.middleware.PublishInQueue(communication, indies_joined_queue, []byte("EOF"))
+			if err != nil {
+				log.Errorf("Error publishing game review count to indies joined queue: %s", err)
+			}
+		}
+	} else if j.config.Genre == "Shooter" {
+		err := j.middleware.PublishInQueue(communication, shooter_negative_joined_queue, []byte("EOF"))
+		if err != nil {
+			log.Errorf("Error publishing game review count to shooter negative joined queue: %s", err)
+		}
+
+		err = j.middleware.PublishInQueue(communication, shooter_positive_joined_queue, []byte("EOF"))
+		if err != nil {
+			log.Errorf("Error publishing game review count to shooter positive joined queue: %s", err)
+		}
 	}
 
-	err = j.middleware.PublishInQueue(communication, shooter_positive_joined_queue, []byte("EOF"))
-	if err != nil {
-		log.Errorf("Error publishing game review count to shooter positive joined queue: %s", err)
-	}
-
-	err = j.middleware.PublishInQueue(communication, indies_joined_queue, []byte("EOF"))
-	if err != nil {
-		log.Errorf("Error publishing game review count to indies joined queue: %s", err)
-	}
 }
 
 func (p *Joiner) saveGames(msg []byte, clientId string) error {

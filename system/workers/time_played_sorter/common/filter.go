@@ -31,10 +31,10 @@ type SorterConfig struct {
 }
 
 type Sorter struct {
-	middleware *middleware.Middleware
-	config     SorterConfig
-	stop       chan bool
-	games      []protocol.Game
+	middleware    *middleware.Middleware
+	config        SorterConfig
+	stop          chan bool
+	gamesSavedMap map[string][]prot.Game
 }
 
 func NewSorter(config SorterConfig) (*Sorter, error) {
@@ -45,9 +45,9 @@ func NewSorter(config SorterConfig) (*Sorter, error) {
 		return nil, err
 	}
 	controller := &Sorter{
-		config:     config,
-		middleware: middleware,
-		games:      make([]prot.Game, 0),
+		config:        config,
+		middleware:    middleware,
+		gamesSavedMap:	make(map[string][]prot.Game),
 	}
 
 	err = controller.middlewareInit()
@@ -122,7 +122,9 @@ func (p *Sorter) Start() {
 			return
 		case result := <-msgChan:
 			msg := result.Msg.Body
-			err := p.sortGames(msg)
+			clientId := result.Msg.Headers["clientId"].(string)
+
+			err := p.sortGames(msg, clientId)
 			if err != nil {
 				result.Msg.Nack(false, false)
 			} else {
@@ -138,53 +140,64 @@ type GameSummary struct {
 	AveragePlaytimeForever int
 }
 
-func (p *Sorter) sendResults() {
+func (p *Sorter) sendResults(clientId string) {
 	log.Infof("Resultado FINAL sort y top:")
-	for _, game := range p.games {
+	games := p.gamesSavedMap[clientId]
+
+	for _, game := range games {
 		log.Infof("Name: %s, AvgPlaytime: %d", game.AppID, game.AveragePlaytimeForever)
 	}
 
 	gamesBuffer := make([]byte, 8)
-	l := len(p.games)
+	l := len(p.gamesSavedMap)
 	binary.BigEndian.PutUint64(gamesBuffer, uint64(l))
 
-	for _, game := range p.games {
+	for _, game := range games {
 		gameBuffer := protocol.SerializeGame(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
 	p.middleware.PublishInExchange(communication, results_exchange, query_key, gamesBuffer)
 }
 
-func (p *Sorter) shouldKeep(game prot.Game, sortBy string, top int) (bool, error) {
+func (p *Sorter) shouldKeep(game prot.Game, sortBy string, top int, clientId string) (bool, error) {
+	games := p.gamesSavedMap[clientId]
+
 	if sortBy == "timePlayed" {
-		if len(p.games) < top {
+		if len(games) < top {
 			return true, nil
-		} else if p.games[0].AveragePlaytimeForever < game.AveragePlaytimeForever {
+		} else if games[0].AveragePlaytimeForever < game.AveragePlaytimeForever {
 			return true, nil
 		} else {
 			return false, nil
 		}
 	}
+
 	return true, nil
 }
 
-func (p *Sorter) saveGame(game prot.Game, top int) error {
-	if len(p.games) < top {
-		p.games = append(p.games, game)
+func (p *Sorter) saveGame(game prot.Game, top int, clientId string) error {
+	games := p.gamesSavedMap[clientId]
+
+	if len(p.gamesSavedMap) < top {
+		games = append(games, game)
 	} else {
-		p.games = p.games[1:]
-		p.games = append(p.games, game)
+		games = games[1:]
+		games = append(games, game)
 	}
-	sort.Slice(p.games, func(i, j int) bool {
-		return p.games[i].AveragePlaytimeForever < p.games[j].AveragePlaytimeForever
+
+	sort.Slice(games, func(i, j int) bool {
+		return games[i].AveragePlaytimeForever < games[j].AveragePlaytimeForever
 	})
+
+	p.gamesSavedMap[clientId] = games
+
 	return nil
 }
 
-func (p *Sorter) sortGames(msg []byte) error {
+func (p *Sorter) sortGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
 		log.Info("Received EOF %s")
-		p.sendResults()
+		p.sendResults(clientId)
 		return nil
 	}
 
@@ -201,14 +214,14 @@ func (p *Sorter) sortGames(msg []byte) error {
 	// Can be set by config
 	top := 10
 
-	shouldKeep, err := p.shouldKeep(game, sortBy, top)
+	shouldKeep, err := p.shouldKeep(game, sortBy, top, clientId)
 	if err != nil {
 		log.Errorf("Error keeping games: ", err)
 		return err
 	}
 	if shouldKeep {
 		log.Debug("Keeping game:", game.AppID, game.ReleaseDate, game.AveragePlaytimeForever, shouldKeep)
-		p.saveGame(game, top)
+		p.saveGame(game, top, clientId)
 	}
 
 	return nil
