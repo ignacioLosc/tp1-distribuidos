@@ -28,29 +28,24 @@ func (s *Server) waitForResults(conn net.Conn) error {
 				if err != nil {
 					return fmt.Errorf("failed to deserialize counter: %w.", err)
 				}
-				log.Info("Received results for query 1", counter)
 				stringResult = fmt.Sprintf("QUERY 1 RESULTS: Windows: %d, Linux: %d, Mac: %d", counter.Windows, counter.Linux, counter.Mac)
 				break
 			case "query2":
-				log.Info("Received results for query 2")
 				gameNames := getGameNames(msg)
 				stringResult = fmt.Sprintf("QUERY 2 RESULTS: ")
 				stringResult = formatGameNames(stringResult, gameNames)
 				break
 			case "query3":
-				log.Info("Received results for query 3")
 				gameNames := getGameReviewCountNames(msg)
 				stringResult = fmt.Sprintf("QUERY 3 RESULTS: ")
 				stringResult = formatGameNames(stringResult, gameNames)
 				break
 			case "query4":
-				log.Info("Received results for query 4")
 				gameNames := getGameReviewCountNames(msg)
 				stringResult = fmt.Sprintf("QUERY 4 RESULTS: ")
 				stringResult = formatGameNames(stringResult, gameNames)
 				break
 			case "query5":
-				log.Info("Received results for query 5")
 				gameNames := getGameReviewCountNames(msg)
 				stringResult = fmt.Sprintf("QUERY 5 RESULTS: ")
 				stringResult = formatGameNames(stringResult, gameNames)

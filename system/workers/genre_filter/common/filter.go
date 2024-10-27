@@ -92,7 +92,6 @@ func (c *GenreFilter) signalListener() {
 }
 
 func (p *GenreFilter) Start() {
-	log.Info("Starting genre filter")
 	defer p.Close()
 
 	go p.signalListener()
@@ -152,6 +151,7 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 
 func (p *GenreFilter) filterGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
+		log.Debug("Received EOF")
 		err := p.middleware.PublishInExchange(communication, filtered_games, "shooter.*.0", []byte("EOF"))
 		if err != nil {
 			log.Errorf("failed to publish EOF: %s", err)
@@ -196,7 +196,6 @@ func (p *GenreFilter) filterGames(msg []byte, clientId string) error {
 		if err != nil {
 			log.Errorf("failed to publish EOF: %s", err)
 		}
-		log.Infof("action: sending_games_EOF | result: success")
 		return nil
 	}
 

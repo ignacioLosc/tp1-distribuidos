@@ -46,11 +46,12 @@ func InitLogger(logLevel string) error {
 }
 
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | joiner_id: %s | joiner_genre: %s",
+	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | joiner_id: %s | joiner_genre: %s | num_sorters: %d",
 		v.GetString("server.port"),
 		v.GetString("log.level"),
 		v.GetString("joiner.id"),
 		v.GetString("joiner.genre"),
+		v.GetInt("sorters"),
 	)
 }
 
@@ -70,6 +71,7 @@ func main() {
 		ServerPort: v.GetString("server.port"),
 		Id:         v.GetString("joiner.id"),
 		Genre:      v.GetString("joiner.genre"),
+		NumSorters: v.GetInt("sorters"),
 	}
 	joiner, err := common.NewJoiner(config)
 

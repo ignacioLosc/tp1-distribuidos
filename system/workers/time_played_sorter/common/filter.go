@@ -108,7 +108,6 @@ func (c *Sorter) signalListener() {
 }
 
 func (p *Sorter) Start() {
-	log.Info("Starting game sorter and top")
 	defer p.Close()
 
 	go p.signalListener()
@@ -141,12 +140,7 @@ type GameSummary struct {
 }
 
 func (p *Sorter) sendResults(clientId string) {
-	log.Infof("Resultado FINAL sort y top:")
 	games := p.gamesSavedMap[clientId]
-
-	for _, game := range games {
-		log.Infof("Name: %s, AvgPlaytime: %d", game.AppID, game.AveragePlaytimeForever)
-	}
 
 	gamesBuffer := make([]byte, 8)
 	l := len(p.gamesSavedMap)
@@ -196,7 +190,7 @@ func (p *Sorter) saveGame(game prot.Game, top int, clientId string) error {
 
 func (p *Sorter) sortGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
-		log.Info("Received EOF %s")
+		log.Debug("Received EOF")
 		p.sendResults(clientId)
 		return nil
 	}
@@ -220,7 +214,6 @@ func (p *Sorter) sortGames(msg []byte, clientId string) error {
 		return err
 	}
 	if shouldKeep {
-		log.Debug("Keeping game:", game.AppID, game.ReleaseDate, game.AveragePlaytimeForever, shouldKeep)
 		p.saveGame(game, top, clientId)
 	}
 

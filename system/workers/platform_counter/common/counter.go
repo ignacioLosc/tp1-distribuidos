@@ -127,7 +127,6 @@ func (p *PlatformCounter) Start() {
 			msg := result.Msg.Body
 
 			if p.finishedMap[clientId] {
-				log.Errorf("Client %s already finished", clientId)
 				result.Msg.Nack(false, true)
 				continue
 			}
@@ -179,7 +178,7 @@ func (p *PlatformCounter) countGames(msg []byte, clientId string) error {
 
 func (p *PlatformCounter) sendResults(clientId string) error {
 	counter := p.countMap[clientId]
-	log.Infof("Results for client ", counter)
+	log.Debug("Results for client ", counter)
 
 	err := p.middleware.PublishInQueue(communication, count_acumulator, counter.Serialize())
 	if err != nil {

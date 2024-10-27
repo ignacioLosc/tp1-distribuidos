@@ -31,6 +31,7 @@ type JoinerConfig struct {
 	ServerPort string
 	Id         string // 0..9
 	Genre      string // Shooter, Indie
+	NumSorters int
 }
 
 type Joiner struct {
@@ -40,7 +41,7 @@ type Joiner struct {
 	reviewsQueue             string
 	savedGameReviewCountsMap map[string]map[string]protocol.GameReviewCount
 	finishedMappers          map[string]int
-	readyForReviews		     map[string]bool
+	readyForReviews          map[string]bool
 }
 
 func NewJoiner(config JoinerConfig) (*Joiner, error) {
@@ -157,7 +158,6 @@ func (j *Joiner) Start() {
 	reviewsMsgChan := make(chan middleware.MsgResponse)
 	go j.middleware.ConsumeFromQueue(communication, j.reviewsQueue, reviewsMsgChan)
 
-	log.Info("Joiner started listening")
 	for {
 		select {
 		case <-j.middleware.Ctx.Done():
@@ -240,7 +240,7 @@ func (j *Joiner) sendJoinedResults(clientId string) {
 
 func (p *Joiner) saveGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
-		log.Info("Joiner finished reading games")
+		log.Debug("Received EOF. Finished reading games")
 		p.readyForReviews[clientId] = true
 		return nil
 	}
@@ -268,9 +268,9 @@ func (p *Joiner) saveGames(msg []byte, clientId string) error {
 func (p *Joiner) joinReviewsAndGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
 		p.finishedMappers[clientId] = p.finishedMappers[clientId] + 1
-		if p.finishedMappers[clientId] == 10 {
+		if p.finishedMappers[clientId] == p.config.NumSorters {
 			p.sendJoinedResults(clientId)
-			log.Info("Joiner finished reading games and reviews")
+			log.Debug("Received EOF. Finished reading reviews")
 		}
 
 		return nil

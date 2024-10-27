@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"sort"
-	"strconv"
 	"syscall"
 
 	"example.com/system/communication/middleware"
@@ -27,7 +26,8 @@ const (
 type SorterConfig struct {
 	ServerPort string
 	Id         string
-	Top        string
+	Top        int
+	NumJoiners int
 }
 
 type Sorter struct {
@@ -101,7 +101,6 @@ func (c *Sorter) signalListener() {
 }
 
 func (p *Sorter) Start() {
-	log.Info("Starting game positiveReviewCount sorter and top 5")
 	defer p.Close()
 
 	go p.signalListener()
@@ -138,7 +137,6 @@ type GameSummary struct {
 }
 
 func (p *Sorter) sendResults(clientId string) {
-	log.Infof("Resultado PARCIAL sort y top %s:", p.config.Top)
 	games, ok := p.gamesSavedMap[clientId]
 	if !ok {
 		p.gamesSavedMap[clientId] = make([]prot.GameReviewCount, 0)
@@ -200,9 +198,9 @@ func (p *Sorter) saveGame(game prot.GameReviewCount, top int, clientId string) e
 
 func (p *Sorter) sortGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
+		log.Debug("Received EOF")
 		p.eofJoinersMap[clientId] = p.eofJoinersMap[clientId] + 1
-		log.Info("Received EOF", p.eofJoinersMap[clientId])
-		if p.eofJoinersMap[clientId] == 5 {
+		if p.eofJoinersMap[clientId] == p.config.NumJoiners {
 			p.sendResults(clientId)
 			p.eofJoinersMap[clientId] = 0
 			delete(p.gamesSavedMap, clientId)
@@ -221,21 +219,14 @@ func (p *Sorter) sortGames(msg []byte, clientId string) error {
 	// Can be set by config
 	sortBy := "positiveReviewCount"
 
-	top, err := strconv.Atoi(p.config.Top)
-	if err != nil {
-		log.Errorf("Failed to parse top number", err)
-		return err
-	}
-
-	shouldKeep, err := p.shouldKeep(game, sortBy, top, clientId)
+	shouldKeep, err := p.shouldKeep(game, sortBy, p.config.Top, clientId)
 	if err != nil {
 		log.Errorf("Error keeping games: ", err)
 		return err
 	}
 
 	if shouldKeep {
-		log.Info("Keeping game: ", game.AppName, game.PositiveReviewCount, game.NegativeReviewCount, game.PositiveEnglishReviewCount)
-		p.saveGame(game, top, clientId)
+		p.saveGame(game, p.config.Top, clientId)
 	}
 
 	return nil

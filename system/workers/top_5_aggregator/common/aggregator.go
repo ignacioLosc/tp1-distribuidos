@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"sort"
-	"strconv"
 	"syscall"
 
 	"example.com/system/communication/middleware"
@@ -28,7 +27,7 @@ const (
 type AggregatorConfig struct {
 	ServerPort string
 	Id         string
-	Top        string
+	NumSorters int
 }
 
 type Aggregator struct {
@@ -100,7 +99,6 @@ func (c *Aggregator) signalListener() {
 }
 
 func (p *Aggregator) Start() {
-	log.Info("Starting game positiveReviewCount aggregator top 5")
 	defer p.Close()
 
 	go p.signalListener()
@@ -134,11 +132,6 @@ type GameSummary struct {
 
 func (p *Aggregator) sendResults(clientId string) {
 	games := p.gamesSavedMap[clientId]
-
-	log.Infof("Resultado FINAL top 5:")
-	for _, game := range games {
-		log.Infof("Name: %s, positiveReviewCount: %d", game.AppName, game.PositiveReviewCount)
-	}
 
 	gamesBuffer := make([]byte, 8)
 	l := len(games)
@@ -185,15 +178,10 @@ func (p *Aggregator) saveGame(game prot.GameReviewCount, top int, clientId strin
 
 func (p *Aggregator) aggregateGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
-		log.Info("Received EOF")
+		log.Debug("Received EOF")
 		p.finishedCount[clientId] = p.finishedCount[clientId] + 1
-		top, err := strconv.Atoi(p.config.Top)
-		if err != nil {
-			log.Errorf("Failed to parse top number", err)
-			return err
-		}
 
-		if p.finishedCount[clientId] == top {
+		if p.finishedCount[clientId] == p.config.NumSorters {
 			p.sendResults(clientId)
 			p.finishedCount[clientId] = 0
 		}
@@ -210,20 +198,13 @@ func (p *Aggregator) aggregateGames(msg []byte, clientId string) error {
 			return err
 		}
 
-		top, err := strconv.Atoi(p.config.Top)
-		if err != nil {
-			log.Errorf("Failed to parse top number", err)
-			return err
-		}
-
-		shouldKeep, err := p.shouldKeep(game, top, clientId)
+		shouldKeep, err := p.shouldKeep(game, p.config.NumSorters, clientId)
 		if err != nil {
 			log.Errorf("Error keeping games: ", err)
 			return err
 		}
 		if shouldKeep {
-			log.Info("Keeping game:", game.AppName, game.PositiveReviewCount, game.NegativeReviewCount, game.PositiveEnglishReviewCount)
-			p.saveGame(game, top, clientId)
+			p.saveGame(game,  p.config.NumSorters, clientId)
 		}
 		index += j
 

@@ -26,13 +26,13 @@ const (
 type AggregatorConfig struct {
 	ServerPort string
 	Id         string
-	Top        string
+	NumJoiners int
 }
 
 type Aggregator struct {
-	middleware *middleware.Middleware
-	config     AggregatorConfig
-	stop       chan bool
+	middleware    *middleware.Middleware
+	config        AggregatorConfig
+	stop          chan bool
 	finishedMap   map[string]int
 	gamesSavedMap map[string][]protocol.GameReviewCount
 }
@@ -45,8 +45,8 @@ func NewAggregator(config AggregatorConfig) (*Aggregator, error) {
 		return nil, err
 	}
 	controller := &Aggregator{
-		config:     config,
-		middleware: middleware,
+		config:        config,
+		middleware:    middleware,
 		gamesSavedMap: make(map[string][]protocol.GameReviewCount),
 		finishedMap:   make(map[string]int),
 	}
@@ -98,7 +98,6 @@ func (c *Aggregator) signalListener() {
 }
 
 func (p *Aggregator) Start() {
-	log.Info("Starting game 5k reviews")
 	defer p.Close()
 
 	go p.signalListener()
@@ -154,9 +153,9 @@ func (p *Aggregator) shouldKeep(game prot.GameReviewCount) (bool, error) {
 
 func (p *Aggregator) filterGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
+		log.Debug("Received EOF")
 		p.finishedMap[clientId] = p.finishedMap[clientId] + 1
-		log.Infof("Finished map: %v", p.finishedMap[clientId])
-		if p.finishedMap[clientId] == 5 {
+		if p.finishedMap[clientId] == p.config.NumJoiners {
 			p.sendGames(clientId)
 			p.finishedMap[clientId] = 0
 			delete(p.gamesSavedMap, clientId)
@@ -177,9 +176,7 @@ func (p *Aggregator) filterGames(msg []byte, clientId string) error {
 	}
 	if shouldKeep {
 		games := p.gamesSavedMap[clientId]
-		log.Info("Keeping game:", game.AppName, game.PositiveReviewCount, game.NegativeReviewCount, game.PositiveEnglishReviewCount)
-		games = append(games, game)
-		p.gamesSavedMap[clientId] = games
+		p.gamesSavedMap[clientId] = append(games, game)
 	}
 
 	return nil

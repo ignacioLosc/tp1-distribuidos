@@ -40,11 +40,11 @@ def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num
     for genre in ['Shooter', 'Indie']:
         for i in range(num_joiners):
             joiner_name = f'joiner{i}-{genre.lower()}'
-            services[joiner_name] = basic_service('joiner', [f'CLI_JOINER_ID={i}', f'CLI_JOINER_GENRE={genre}'], joiner_name)
+            services[joiner_name] = basic_service('joiner', [f'CLI_JOINER_ID={i}', f'CLI_JOINER_GENRE={genre}', f'CLI_SORTERS={num_sorters}'], joiner_name)
 
     for i in range(num_sorters):
         name = f'positive-sorter-{i}'
-        services[name] = basic_service('positive_sorter_top_5', [f'CLI_SORTER_ID={i}', 'CLI_TOP=5'], name)
+        services[name] = basic_service('positive_sorter_top_5', [f'CLI_SORTER_ID={i}', f'CLI_TOP=5', f'CLI_JOINERS={num_joiners}'], name)
 
     for i in range(num_mappers):
         name = f'review-mapper-{i}'

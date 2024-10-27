@@ -165,7 +165,7 @@ func (p *PercentileCalculator) sendGames(games []protocol.GameReviewCount, clien
 
 func (p *PercentileCalculator) accumulateGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
-		log.Info("Received EOF")
+		log.Debug("Received EOF")
 		p.finishedMap[clientId] = p.finishedMap[clientId] + 1
 		if p.finishedMap[clientId] == p.config.NumJoiners {
 			p.calculatePercentile(clientId)

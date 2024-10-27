@@ -60,12 +60,12 @@ func main() {
 		return
 	}
 
-	PrintConfig(v)
-
 	if err := InitLogger(v.GetString("log.level")); err != nil {
 		log.Criticalf("%s", err)
 		return
 	}
+
+	PrintConfig(v)
 
 	clientConfig := common.ClientConfig{
 		ServerAddress: v.GetString("server.address"),

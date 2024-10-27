@@ -130,7 +130,6 @@ func (p *ReviewMapper) Start() {
 }
 
 func (p *ReviewMapper) sendEOF() error {
-	log.Info("Sending EOF IN REVIEW MAPPER")
 	err := p.middleware.PublishInExchange(communication, filtered_reviews, "0", []byte("EOF"))
 	err = p.middleware.PublishInExchange(communication, filtered_reviews, "1", []byte("EOF"))
 	err = p.middleware.PublishInExchange(communication, filtered_reviews, "2", []byte("EOF"))
@@ -155,7 +154,7 @@ func (p *ReviewMapper) mapReview(review protocol.Review) protocol.MappedReview {
 
 func (p *ReviewMapper) mapReviews(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
-		log.Info("Received EOF. Stopping")
+		log.Debug("Received EOF")
 		p.sendEOF()
 		return nil
 	}

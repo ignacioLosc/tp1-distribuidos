@@ -45,10 +45,10 @@ func InitLogger(logLevel string) error {
 }
 
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | amount_sorters: %s",
+	log.Infof("action: config | result: sucess | server_port: %s | log_level: %s | num_joiners: %d",
 		v.GetString("server.port"),
 		v.GetString("log.level"),
-		v.GetString("sorters"),
+		v.GetInt("joiners"),
 	)
 }
 
@@ -66,7 +66,7 @@ func main() {
 
 	config := common.AggregatorConfig{
 		ServerPort: v.GetString("server.port"),
-		Top:        v.GetString("sorters"),
+		NumJoiners: v.GetInt("joiners"),
 	}
 	aggregator, err := common.NewAggregator(config)
 

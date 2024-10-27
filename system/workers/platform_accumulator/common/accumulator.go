@@ -131,9 +131,9 @@ func (p *PlatformAccumulator) countGames(msg []byte, clientId string) error {
 	counterAccu := p.countMap[clientId]
 
 	if string(msg) == "EOF" {
+		log.Debugf("Received EOF")
 		p.finishedMap[clientId] = p.finishedMap[clientId] + 1
 		if p.finishedMap[clientId] == p.config.NumCounters {
-			log.Infof("Resultado FINAL: %d Windows: %d, Linux: %d, Mac: %d", p.finishedMap[clientId], counterAccu.Windows, counterAccu.Linux, counterAccu.Mac)
 			p.middleware.PublishInExchange(communication, results_exchange, query_key, counterAccu.Serialize())
 			p.countMap[clientId] = prot.PlatformCount{}
 		}
@@ -147,8 +147,6 @@ func (p *PlatformAccumulator) countGames(msg []byte, clientId string) error {
 	}
 	counterAccu.IncrementVals(counter.Windows, counter.Linux, counter.Mac)
 	p.countMap[clientId] = counterAccu
-
-	log.Debugf("Counter Resultado PARCIAL : Windows: %d, Linux: %d, Mac: %d", counterAccu.Windows, counterAccu.Linux, counterAccu.Mac)
 
 	return nil
 }
