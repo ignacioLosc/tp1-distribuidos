@@ -140,7 +140,7 @@ func (p *Aggregator) sendGames(clientId string) {
 		gameBuffer := protocol.SerializeGameReviewCount(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
-	p.middleware.PublishInExchange(communication, results_exchange, clientId+"."+query_key, gamesBuffer)
+	p.middleware.PublishInExchange(communication, results_exchange, clientId+"."+query_key, gamesBuffer, clientId)
 }
 
 func (p *Aggregator) shouldKeep(game prot.GameReviewCount) (bool, error) {

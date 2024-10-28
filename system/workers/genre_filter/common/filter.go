@@ -122,7 +122,7 @@ func parseDate(releaseDate string) (int, error) {
 	return strconv.Atoi(releaseDate[len(releaseDate)-4:])
 }
 
-func (p *GenreFilter) filterGame(game prot.Game) error {
+func (p *GenreFilter) filterGame(game prot.Game, clientId string) error {
 	year, err := parseDate(game.ReleaseDate)
 	if err != nil {
 		log.Errorf("Failed to parse decade: %s", game.ReleaseDate)
@@ -134,13 +134,13 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 
 	if strings.Contains(game.Genres, "Indie") {
 		t := fmt.Sprintf("indie.%s.%s", decade, appIdRange)
-		err = p.middleware.PublishInExchange(communication, filtered_games, t, prot.SerializeGame(&game))
+		err = p.middleware.PublishInExchange(communication, filtered_games, t, prot.SerializeGame(&game), clientId)
 		if err != nil {
 			return err
 		}
 	} else if strings.Contains(game.Genres, "Shooter") {
 		t := fmt.Sprintf("shooter.%s.%s", decade, appIdRange)
-		err = p.middleware.PublishInExchange(communication, filtered_games, t, prot.SerializeGame(&game))
+		err = p.middleware.PublishInExchange(communication, filtered_games, t, prot.SerializeGame(&game), clientId)
 		if err != nil {
 			return err
 		}
@@ -152,47 +152,47 @@ func (p *GenreFilter) filterGame(game prot.Game) error {
 func (p *GenreFilter) filterGames(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
 		log.Debug("Received EOF")
-		err := p.middleware.PublishInExchange(communication, filtered_games, "shooter.*.0", []byte("EOF"))
+		err := p.middleware.PublishInExchange(communication, filtered_games, "shooter.*.0", []byte("EOF"), clientId)
 		if err != nil {
 			log.Errorf("failed to publish EOF: %s", err)
 		}
-		err = p.middleware.PublishInExchange(communication, filtered_games, "shooter.*.1", []byte("EOF"))
+		err = p.middleware.PublishInExchange(communication, filtered_games, "shooter.*.1", []byte("EOF"), clientId)
 		if err != nil {
 			log.Errorf("failed to publish EOF: %s", err)
 		}
-		err = p.middleware.PublishInExchange(communication, filtered_games, "shooter.*.2", []byte("EOF"))
+		err = p.middleware.PublishInExchange(communication, filtered_games, "shooter.*.2", []byte("EOF"), clientId)
 		if err != nil {
 			log.Errorf("failed to publish EOF: %s", err)
 		}
-		err = p.middleware.PublishInExchange(communication, filtered_games, "shooter.*.3", []byte("EOF"))
+		err = p.middleware.PublishInExchange(communication, filtered_games, "shooter.*.3", []byte("EOF"), clientId)
 		if err != nil {
 			log.Errorf("failed to publish EOF: %s", err)
 		}
-		err = p.middleware.PublishInExchange(communication, filtered_games, "shooter.*.4", []byte("EOF"))
+		err = p.middleware.PublishInExchange(communication, filtered_games, "shooter.*.4", []byte("EOF"), clientId)
 		if err != nil {
 			log.Errorf("failed to publish EOF: %s", err)
 		}
-		err = p.middleware.PublishInExchange(communication, filtered_games, "indie.*.0", []byte("EOF"))
+		err = p.middleware.PublishInExchange(communication, filtered_games, "indie.*.0", []byte("EOF"), clientId)
 		if err != nil {
 			log.Errorf("failed to publish EOF: %s", err)
 		}
-		err = p.middleware.PublishInExchange(communication, filtered_games, "indie.*.1", []byte("EOF"))
+		err = p.middleware.PublishInExchange(communication, filtered_games, "indie.*.1", []byte("EOF"), clientId)
 		if err != nil {
 			log.Errorf("failed to publish EOF: %s", err)
 		}
-		err = p.middleware.PublishInExchange(communication, filtered_games, "indie.*.2", []byte("EOF"))
+		err = p.middleware.PublishInExchange(communication, filtered_games, "indie.*.2", []byte("EOF"), clientId)
 		if err != nil {
 			log.Errorf("failed to publish EOF: %s", err)
 		}
-		err = p.middleware.PublishInExchange(communication, filtered_games, "indie.*.3", []byte("EOF"))
+		err = p.middleware.PublishInExchange(communication, filtered_games, "indie.*.3", []byte("EOF"), clientId)
 		if err != nil {
 			log.Errorf("failed to publish EOF: %s", err)
 		}
-		err = p.middleware.PublishInExchange(communication, filtered_games, "indie.*.4", []byte("EOF"))
+		err = p.middleware.PublishInExchange(communication, filtered_games, "indie.*.4", []byte("EOF"), clientId)
 		if err != nil {
 			log.Errorf("failed to publish EOF: %s", err)
 		}
-		err = p.middleware.PublishInExchange(communication, filtered_games, "indie.2010.*", []byte("EOF"))
+		err = p.middleware.PublishInExchange(communication, filtered_games, "indie.2010.*", []byte("EOF"), clientId)
 		if err != nil {
 			log.Errorf("failed to publish EOF: %s", err)
 		}
@@ -210,7 +210,7 @@ func (p *GenreFilter) filterGames(msg []byte, clientId string) error {
 			continue
 		}
 
-		err = p.filterGame(game)
+		err = p.filterGame(game, clientId)
 		if err != nil {
 			log.Errorf("Failed to filter game: %s", err)
 			return nil

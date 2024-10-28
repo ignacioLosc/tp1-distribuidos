@@ -11,10 +11,9 @@ import (
 
 func (s *Server) waitForResults(conn net.Conn, clientId string) error {
 	msgChan := make(chan middleware.MsgResponse)
-	id := "33"
 
 	s.middleware.DeclareDirectQueue(communication, "query_results")
-	s.middleware.BindQueueToExchange(communication, "results", "query_results", id+".*")
+	s.middleware.BindQueueToExchange(communication, "results", "query_results", clientId+".*")
 
 	go s.middleware.ConsumeExchange(communication, "query_results", msgChan)
 	for {
@@ -28,29 +27,29 @@ func (s *Server) waitForResults(conn net.Conn, clientId string) error {
 			msg := result.Msg.Body
 			result.Msg.Ack(false)
 			switch result.Msg.RoutingKey {
-			case id+".query1":
+			case clientId+".query1":
 				counter, err := protocol.DeserializeCounter(msg)
 				if err != nil {
 					return fmt.Errorf("failed to deserialize counter: %w.", err)
 				}
 				stringResult = fmt.Sprintf("QUERY 1 RESULTS: Windows: %d, Linux: %d, Mac: %d", counter.Windows, counter.Linux, counter.Mac)
 				break
-			case id+".query2":
+			case clientId+".query2":
 				gameNames := getGameNames(msg)
 				stringResult = fmt.Sprintf("QUERY 2 RESULTS: ")
 				stringResult = formatGameNames(stringResult, gameNames)
 				break
-			case id+".query3":
+			case clientId+".query3":
 				gameNames := getGameReviewCountNames(msg)
 				stringResult = fmt.Sprintf("QUERY 3 RESULTS: ")
 				stringResult = formatGameNames(stringResult, gameNames)
 				break
-			case id+".query4":
+			case clientId+".query4":
 				gameNames := getGameReviewCountNames(msg)
 				stringResult = fmt.Sprintf("QUERY 4 RESULTS: ")
 				stringResult = formatGameNames(stringResult, gameNames)
 				break
-			case id+".query5":
+			case clientId+".query5":
 				gameNames := getGameReviewCountNames(msg)
 				stringResult = fmt.Sprintf("QUERY 5 RESULTS: ")
 				stringResult = formatGameNames(stringResult, gameNames)

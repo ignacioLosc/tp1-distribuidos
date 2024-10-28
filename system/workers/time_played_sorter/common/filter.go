@@ -150,7 +150,7 @@ func (p *Sorter) sendResults(clientId string) {
 		gameBuffer := protocol.SerializeGame(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
-	p.middleware.PublishInExchange(communication, results_exchange, clientId+"."+query_key, gamesBuffer)
+	p.middleware.PublishInExchange(communication, results_exchange, clientId+"."+query_key, gamesBuffer, clientId)
 }
 
 func (p *Sorter) shouldKeep(game prot.Game, sortBy string, top int, clientId string) (bool, error) {

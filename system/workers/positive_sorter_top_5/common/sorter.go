@@ -154,8 +154,8 @@ func (p *Sorter) sendResults(clientId string) {
 		gameBuffer := protocol.SerializeGameReviewCount(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
-	p.middleware.PublishInQueue(communication, top_5_partial_results, gamesBuffer)
-	p.middleware.PublishInQueue(communication, top_5_partial_results, []byte("EOF"))
+	p.middleware.PublishInQueue(communication, top_5_partial_results, gamesBuffer, clientId)
+	p.middleware.PublishInQueue(communication, top_5_partial_results, []byte("EOF"), clientId)
 }
 
 func (p *Sorter) shouldKeep(game prot.GameReviewCount, sortBy string, top int, clientId string) (bool, error) {

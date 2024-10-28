@@ -160,7 +160,7 @@ func (m *Middleware) BindQueueToExchange(channelName string, exchangeName string
 	)
 }
 
-func (m *Middleware) PublishInExchange(channelName string, exchangeName string, routingKey string, message []byte) error {
+func (m *Middleware) PublishInExchange(channelName string, exchangeName string, routingKey string, message []byte, clientId string) error {
 	ch, ok := m.channels[channelName]
 	if !ok {
 		return fmt.Errorf("Channel %s not found", channelName)
@@ -175,12 +175,12 @@ func (m *Middleware) PublishInExchange(channelName string, exchangeName string, 
 			ContentType: "text/plain",
 			Body:        message,
 			Headers:    amqp.Table{
-				"clientId": "33",
+				"clientId": clientId,
 			},
 		})
 }
 
-func (m *Middleware) PublishInQueue(channelName string, queueName string, message []byte) error {
+func (m *Middleware) PublishInQueue(channelName string, queueName string, message []byte, clientId string) error {
 	ch, ok := m.channels[channelName]
 	if !ok {
 		return fmt.Errorf("Channel %s not found", channelName)
@@ -195,7 +195,7 @@ func (m *Middleware) PublishInQueue(channelName string, queueName string, messag
 			ContentType: "text/plain",
 			Body:        message,
 			Headers:    amqp.Table{
-				"clientId": "33",
+				"clientId": clientId,
 			},
 		})
 

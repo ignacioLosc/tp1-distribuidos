@@ -195,19 +195,19 @@ func (j *Joiner) Start() {
 func (j *Joiner) sendJoinedResults(clientId string) {
 	for appId, gameReviewCount := range j.savedGameReviewCountsMap[clientId] {
 		if j.config.Genre == "Indie" {
-			err := j.middleware.PublishInQueue(communication, indies_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
+			err := j.middleware.PublishInQueue(communication, indies_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount), clientId)
 			if err != nil {
 				log.Errorf("Error publishing game review count to indies joined queue: %s", err)
 				continue
 			}
 		} else if j.config.Genre == "Shooter" {
-			err := j.middleware.PublishInQueue(communication, shooter_negative_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
+			err := j.middleware.PublishInQueue(communication, shooter_negative_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount), clientId)
 			if err != nil {
 				log.Errorf("Error publishing game review count to shooter negative joined queue: %s", err)
 				continue
 			}
 
-			err = j.middleware.PublishInQueue(communication, shooter_positive_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount))
+			err = j.middleware.PublishInQueue(communication, shooter_positive_joined_queue, protocol.SerializeGameReviewCount(&gameReviewCount), clientId)
 			if err != nil {
 				log.Errorf("Error publishing game review count to shooter positive joined queue: %s", err)
 				continue
@@ -219,18 +219,18 @@ func (j *Joiner) sendJoinedResults(clientId string) {
 
 	if j.config.Genre == "Indie" {
 		for i := 0; i < 5; i++ {
-			err := j.middleware.PublishInQueue(communication, indies_joined_queue, []byte("EOF"))
+			err := j.middleware.PublishInQueue(communication, indies_joined_queue, []byte("EOF"), clientId)
 			if err != nil {
 				log.Errorf("Error publishing game review count to indies joined queue: %s", err)
 			}
 		}
 	} else if j.config.Genre == "Shooter" {
-		err := j.middleware.PublishInQueue(communication, shooter_negative_joined_queue, []byte("EOF"))
+		err := j.middleware.PublishInQueue(communication, shooter_negative_joined_queue, []byte("EOF"), clientId)
 		if err != nil {
 			log.Errorf("Error publishing game review count to shooter negative joined queue: %s", err)
 		}
 
-		err = j.middleware.PublishInQueue(communication, shooter_positive_joined_queue, []byte("EOF"))
+		err = j.middleware.PublishInQueue(communication, shooter_positive_joined_queue, []byte("EOF"), clientId)
 		if err != nil {
 			log.Errorf("Error publishing game review count to shooter positive joined queue: %s", err)
 		}

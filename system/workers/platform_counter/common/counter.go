@@ -180,11 +180,11 @@ func (p *PlatformCounter) sendResults(clientId string) error {
 	counter := p.countMap[clientId]
 	log.Debug("Results for client ", counter)
 
-	err := p.middleware.PublishInQueue(communication, count_acumulator, counter.Serialize())
+	err := p.middleware.PublishInQueue(communication, count_acumulator, counter.Serialize(), clientId)
 	if err != nil {
 		return err
 	}
-	err = p.middleware.PublishInQueue(communication, count_acumulator, []byte("EOF"))
+	err = p.middleware.PublishInQueue(communication, count_acumulator, []byte("EOF"), clientId)
 	if err != nil {
 		return err
 	}

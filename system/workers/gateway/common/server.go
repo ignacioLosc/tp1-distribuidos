@@ -206,21 +206,21 @@ func (s *Server) listenOnChannels(gamesChan chan []byte, reviewsChan chan []byte
 			log.Infof("listenOnChannels returning")
 			return
 		case games := <-gamesChan:
-			s.middleware.PublishInQueue(communication, "games_to_filter", games)
+			s.middleware.PublishInQueue(communication, "games_to_filter", games, clientId)
 			if string(games) == "EOF" {
 				for i := 0; i < s.config.NumCounters; i++ {
-					s.middleware.PublishInQueue(communication, "games_to_count", []byte("EOF"))
+					s.middleware.PublishInQueue(communication, "games_to_count", []byte("EOF"), clientId)
 				}
 			} else {
-				s.middleware.PublishInQueue(communication, "games_to_count", games)
+				s.middleware.PublishInQueue(communication, "games_to_count", games, clientId)
 			}
 		case review := <-reviewsChan:
 			if string(review) == "EOF" {
 				for i := 0; i < s.config.NumMappers; i++ {
-					s.middleware.PublishInQueue(communication, "reviews", []byte("EOF"))
+					s.middleware.PublishInQueue(communication, "reviews", []byte("EOF"), clientId)
 				}
 			} else {
-				s.middleware.PublishInQueue(communication, "reviews", review)
+				s.middleware.PublishInQueue(communication, "reviews", review, clientId)
 			}
 		}
 	}

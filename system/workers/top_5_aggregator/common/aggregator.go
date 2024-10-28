@@ -142,7 +142,7 @@ func (p *Aggregator) sendResults(clientId string) {
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
 
-	p.middleware.PublishInExchange(communication, results_exchange, clientId+"."+query_key, gamesBuffer)
+	p.middleware.PublishInExchange(communication, results_exchange, clientId+"."+query_key, gamesBuffer, clientId)
 }
 
 func (p *Aggregator) shouldKeep(game prot.GameReviewCount, top int, clientId string) (bool, error) {

@@ -160,7 +160,7 @@ func (p *PercentileCalculator) sendGames(games []protocol.GameReviewCount, clien
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
 
-	p.middleware.PublishInExchange(communication, results_exchange, clientId+"."+query_key, gamesBuffer)
+	p.middleware.PublishInExchange(communication, results_exchange, clientId+"."+query_key, gamesBuffer, clientId)
 }
 
 func (p *PercentileCalculator) accumulateGames(msg []byte, clientId string) error {

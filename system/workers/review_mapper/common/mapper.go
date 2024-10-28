@@ -129,12 +129,12 @@ func (p *ReviewMapper) Start() {
 	}
 }
 
-func (p *ReviewMapper) sendEOF() error {
-	err := p.middleware.PublishInExchange(communication, filtered_reviews, "0", []byte("EOF"))
-	err = p.middleware.PublishInExchange(communication, filtered_reviews, "1", []byte("EOF"))
-	err = p.middleware.PublishInExchange(communication, filtered_reviews, "2", []byte("EOF"))
-	err = p.middleware.PublishInExchange(communication, filtered_reviews, "3", []byte("EOF"))
-	err = p.middleware.PublishInExchange(communication, filtered_reviews, "4", []byte("EOF"))
+func (p *ReviewMapper) sendEOF(clientId string) error {
+	err := p.middleware.PublishInExchange(communication, filtered_reviews, "0", []byte("EOF"), clientId)
+	err = p.middleware.PublishInExchange(communication, filtered_reviews, "1", []byte("EOF"), clientId)
+	err = p.middleware.PublishInExchange(communication, filtered_reviews, "2", []byte("EOF"), clientId)
+	err = p.middleware.PublishInExchange(communication, filtered_reviews, "3", []byte("EOF"), clientId)
+	err = p.middleware.PublishInExchange(communication, filtered_reviews, "4", []byte("EOF"), clientId)
 	if err != nil {
 		log.Info("Error: Couldn't send EOF")
 		return err
@@ -155,7 +155,7 @@ func (p *ReviewMapper) mapReview(review protocol.Review) protocol.MappedReview {
 func (p *ReviewMapper) mapReviews(msg []byte, clientId string) error {
 	if string(msg) == "EOF" {
 		log.Debug("Received EOF")
-		p.sendEOF()
+		p.sendEOF(clientId)
 		return nil
 	}
 
@@ -174,7 +174,7 @@ func (p *ReviewMapper) mapReviews(msg []byte, clientId string) error {
 		reviewBuffer := protocol.SerializeMappedReview(&mappedReview)
 
 		gameRange := utils.GetRange(review.AppID, p.config.NumJoiners)
-		err = p.sendReview(reviewBuffer, gameRange)
+		err = p.sendReview(reviewBuffer, gameRange, clientId)
 		if err != nil {
 			log.Error("Error sending mapped review: %v", err)
 			return err
@@ -186,8 +186,8 @@ func (p *ReviewMapper) mapReviews(msg []byte, clientId string) error {
 	return nil
 }
 
-func (p *ReviewMapper) sendReview(review []byte, gameRange int) error {
-	err := p.middleware.PublishInExchange(communication, filtered_reviews, strconv.Itoa(gameRange), review)
+func (p *ReviewMapper) sendReview(review []byte, gameRange int, clientId string) error {
+	err := p.middleware.PublishInExchange(communication, filtered_reviews, strconv.Itoa(gameRange), review, clientId)
 	if err != nil {
 		log.Error("Error sending mapped review: %v", err)
 		return err
