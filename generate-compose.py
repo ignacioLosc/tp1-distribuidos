@@ -32,7 +32,7 @@ def basic_service(worker, env: list = [], container_name=None, log_level=DEFAULT
     return obj
 
 
-def generate_docker_compose(worker_list, log_level=DEFAULT_LOG_LEVEL, client_volumes=None, num_joiners=5, num_sorters=5, num_mappers=1, num_counters=1, batch_size=5):
+def generate_docker_compose(worker_list, log_level=DEFAULT_LOG_LEVEL, client_volumes=None, num_clients=2, num_joiners=5, num_sorters=5, num_mappers=1, num_counters=1, batch_size=5):
     services = {}
     for worker in worker_list:
         services[worker] = basic_service(worker, log_level=log_level)
@@ -57,13 +57,13 @@ def generate_docker_compose(worker_list, log_level=DEFAULT_LOG_LEVEL, client_vol
     services['gateway']['environment'].append('CLI_SERVER_PORT=5555')
     services['gateway']['environment'].append(f'CLI_MAPPERS={num_mappers}')
 
-    services['client']['volumes'] = client_volumes if client_volumes else [
-        './.data/games.csv:/app/games.csv',
-        './.data/dataset.csv:/app/dataset.csv'
-    ]
-    services['client']['environment'].append('CLI_SERVER_ADDRESS=gateway:5555')
-    services['client']['environment'].append('CLI_DATA_PATH=.data')
-    services['client']['environment'].append(f'CLI_BATCH_SIZE={batch_size}')
+    for i in range(num_clients): # num_clients
+        name = f'client-{i}'
+        services[name] = basic_service('client', [f'CLI_CLIENT_ID={i}', f'CLI_SERVER_ADDRESS=gateway:5555', f'CLI_DATA_PATH=.data', f'CLI_BATCH_SIZE={batch_size}'], name, log_level)
+        services[name]['volumes'] = client_volumes if client_volumes else [
+            './.data/games.csv:/app/games.csv',
+            './.data/dataset.csv:/app/dataset.csv'
+        ]
 
     services['5k_reviews_aggregator']['environment'].append(f'CLI_JOINERS={num_joiners}')
     services['90th_percentile_calculator']['environment'].append(f'CLI_JOINERS={num_sorters}')
@@ -130,7 +130,6 @@ config = open_config(args.config_file)
 
 
 worker_list = [
-    "client",
     "gateway",
     "90th_percentile_calculator",
     "5k_reviews_aggregator",
@@ -139,6 +138,7 @@ worker_list = [
     "time_played_sorter",
     "top_5_aggregator"
 
+    # "client",
     # "platform_counter",
     # "review_mapper",
     # "positive_sorter_top_5",
@@ -159,6 +159,7 @@ client_volumes = [f'{game_file}:/app/games.csv', f'{reviews_file}:/app/dataset.c
 generate_docker_compose(worker_list,
                         log_level=config.get("LOG_LEVEL", DEFAULT_LOG_LEVEL),
                         client_volumes=client_volumes,
+                        num_clients=config.get("NUM_CLIENTS", None),
                         num_joiners=config.get("NUM_JOINERS", None),
                         num_sorters=config.get("NUM_SORTERS", None),
                         num_mappers=config.get("NUM_MAPPERS", None),

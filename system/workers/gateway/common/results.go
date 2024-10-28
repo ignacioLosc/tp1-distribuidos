@@ -13,9 +13,13 @@ func (s *Server) waitForResults(conn net.Conn, clientId string) error {
 	msgChan := make(chan middleware.MsgResponse)
 
 	s.middleware.DeclareDirectQueue(communication, "query_results")
-	s.middleware.BindQueueToExchange(communication, "results", "query_results", clientId+".*")
+	qName, err := s.middleware.DeclareTemporaryQueue(communication)
+	if err != nil {
+		return fmt.Errorf("failed to declare temporary queue: %w.", err)
+	}
+	s.middleware.BindQueueToExchange(communication, "results", qName, clientId+".*")
 
-	go s.middleware.ConsumeExchange(communication, "query_results", msgChan)
+	go s.middleware.ConsumeExchange(communication, qName, msgChan)
 	for {
 		select {
 		case <-s.middleware.Ctx.Done():

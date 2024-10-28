@@ -1,6 +1,7 @@
 {
 	"GAMES_FILE": "./.data/games.csv",
 	"REVIEWS_FILE": "./.data/dataset.csv",
+	"NUM_CLIENTS": 2,
 	"BATCH_SIZE": 2,
 	"NUM_JOINERS": 5,
 	"NUM_SORTERS": 5,

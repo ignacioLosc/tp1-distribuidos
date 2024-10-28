@@ -57,7 +57,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		return nil, err
 	}
 
-	log.Infof("Server listening on %s", addr)
+	log.Infof("action: server_listening | address: %s", addr)
 
 	return server, nil
 }
@@ -141,13 +141,9 @@ func (s *Server) Start() {
 			if err != nil {
 				clientId = connectionResult.Conn.LocalAddr().String()
 			}
-			log.Infof("Client connected: %s", clientId)
+			log.Infof("action: new_connection | id: %s", clientId)
 			go s.receiveDatasets(connectionResult.Conn, clientId)
-			connectionResult.Error = s.waitForResults(connectionResult.Conn, clientId)
-			if connectionResult.Error != nil {
-				log.Errorf("Error while receiving results: %v", connectionResult.Error)
-				continue
-			}
+			go s.waitForResults(connectionResult.Conn, clientId)
 		}
 	}
 }
