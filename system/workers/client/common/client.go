@@ -81,7 +81,7 @@ func (c *Client) waitForResults() {
 			return
 		}
 
-		log.Info("QUERY REPONSE: ", string(buf))
+		log.Info("QUERY RESPONSE: ", string(buf))
 		results++
 	}
 
@@ -211,11 +211,8 @@ func SendCSV(conn net.Conn, fileReader *csv.Reader, parser func([]string) ([]byt
 		if err != nil {
 			return fmt.Errorf("Unable to send batch: %v", err)
 		}
-
-		log.Debugf("action: batch_sent | len: %d | result: success", parsed)
 	}
 
-	log.Info("action: sending_eof")
 	LenBuffer := make([]byte, 8)
 	binary.BigEndian.PutUint64(LenBuffer, uint64(3)) // length of EOF
 	err = utils.SendAll(conn, LenBuffer)
@@ -227,8 +224,6 @@ func SendCSV(conn net.Conn, fileReader *csv.Reader, parser func([]string) ([]byt
 	if err != nil {
 		return fmt.Errorf("Unable to send EOF: %v", err)
 	}
-
-	log.Info("action: EOF_games | result: success")
 
 	return nil
 }

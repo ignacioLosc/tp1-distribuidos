@@ -32,27 +32,27 @@ def basic_service(worker, env: list = [], container_name=None, log_level=DEFAULT
     return obj
 
 
-def generate_docker_compose(worker_list, client_volumes=None, num_joiners=5, num_sorters=5, num_mappers=1, num_counters=1, batch_size=5):
+def generate_docker_compose(worker_list, log_level=DEFAULT_LOG_LEVEL, client_volumes=None, num_joiners=5, num_sorters=5, num_mappers=1, num_counters=1, batch_size=5):
     services = {}
     for worker in worker_list:
-        services[worker] = basic_service(worker)
+        services[worker] = basic_service(worker, log_level=log_level)
 
     for genre in ['Shooter', 'Indie']:
         for i in range(num_joiners):
             joiner_name = f'joiner{i}-{genre.lower()}'
-            services[joiner_name] = basic_service('joiner', [f'CLI_JOINER_ID={i}', f'CLI_JOINER_GENRE={genre}', f'CLI_SORTERS={num_sorters}'], joiner_name)
+            services[joiner_name] = basic_service('joiner', [f'CLI_JOINER_ID={i}', f'CLI_JOINER_GENRE={genre}', f'CLI_SORTERS={num_sorters}'], joiner_name, log_level=log_level)
 
     for i in range(num_sorters):
         name = f'positive-sorter-{i}'
-        services[name] = basic_service('positive_sorter_top_5', [f'CLI_SORTER_ID={i}', f'CLI_TOP=5', f'CLI_JOINERS={num_joiners}'], name)
+        services[name] = basic_service('positive_sorter_top_5', [f'CLI_SORTER_ID={i}', f'CLI_TOP=5', f'CLI_JOINERS={num_joiners}'], name, log_level=log_level)
 
     for i in range(num_mappers):
         name = f'review-mapper-{i}'
-        services[name] = basic_service('review_mapper', [f'CLI_MAPPER_ID={i}', f'CLI_JOINERS={num_joiners}'], name)
+        services[name] = basic_service('review_mapper', [f'CLI_MAPPER_ID={i}', f'CLI_JOINERS={num_joiners}'], name, log_level=log_level)
 
     for i in range(num_counters):
         name = f'platform-counter-{i}'
-        services[name] = basic_service('platform_counter', [f'CLI_COUNTER_ID={i}'], name)
+        services[name] = basic_service('platform_counter', [f'CLI_COUNTER_ID={i}'], name, log_level=log_level)
 
     services['gateway']['environment'].append('CLI_SERVER_PORT=5555')
     services['gateway']['environment'].append(f'CLI_MAPPERS={num_mappers}')
@@ -157,7 +157,8 @@ if not game_file:
 
 client_volumes = [f'{game_file}:/app/games.csv', f'{reviews_file}:/app/dataset.csv']
 generate_docker_compose(worker_list,
-                        client_volumes,
+                        log_level=config.get("LOG_LEVEL", DEFAULT_LOG_LEVEL),
+                        client_volumes=client_volumes,
                         num_joiners=config.get("NUM_JOINERS", None),
                         num_sorters=config.get("NUM_SORTERS", None),
                         num_mappers=config.get("NUM_MAPPERS", None),
