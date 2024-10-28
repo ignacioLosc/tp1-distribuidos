@@ -76,7 +76,7 @@ func (p PlatformAccumulator) middlewareAccumulatorInit() error {
 		return err
 	}
 
-	err = p.middleware.DeclareExchange(communication, results_exchange, "direct")
+	err = p.middleware.DeclareExchange(communication, results_exchange, "topic")
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func (p *PlatformAccumulator) countGames(msg []byte, clientId string) error {
 		log.Debugf("Received EOF")
 		p.finishedMap[clientId] = p.finishedMap[clientId] + 1
 		if p.finishedMap[clientId] == p.config.NumCounters {
-			p.middleware.PublishInExchange(communication, results_exchange, query_key, counterAccu.Serialize())
+			p.middleware.PublishInExchange(communication, results_exchange, clientId+"."+query_key, counterAccu.Serialize())
 			p.countMap[clientId] = prot.PlatformCount{}
 		}
 		return nil

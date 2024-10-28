@@ -71,7 +71,7 @@ func (c *Aggregator) middlewareInit() error {
 		return err
 	}
 
-	err = c.middleware.DeclareExchange(communication, results_exchange, "direct")
+	err = c.middleware.DeclareExchange(communication, results_exchange, "topic")
 	if err != nil {
 		log.Errorf("Error declaring results exchange")
 		return err
@@ -142,7 +142,7 @@ func (p *Aggregator) sendResults(clientId string) {
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
 
-	p.middleware.PublishInExchange(communication, results_exchange, query_key, gamesBuffer)
+	p.middleware.PublishInExchange(communication, results_exchange, clientId+"."+query_key, gamesBuffer)
 }
 
 func (p *Aggregator) shouldKeep(game prot.GameReviewCount, top int, clientId string) (bool, error) {

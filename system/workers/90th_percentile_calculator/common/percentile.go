@@ -71,7 +71,7 @@ func (c *PercentileCalculator) middlewareInit() error {
 		return err
 	}
 
-	err = c.middleware.DeclareExchange(communication, results_exchange, "direct")
+	err = c.middleware.DeclareExchange(communication, results_exchange, "topic")
 	if err != nil {
 		log.Errorf("Error declaring results exchange")
 		return err
@@ -160,7 +160,7 @@ func (p *PercentileCalculator) sendGames(games []protocol.GameReviewCount, clien
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
 
-	p.middleware.PublishInExchange(communication, results_exchange, query_key, gamesBuffer)
+	p.middleware.PublishInExchange(communication, results_exchange, clientId+"."+query_key, gamesBuffer)
 }
 
 func (p *PercentileCalculator) accumulateGames(msg []byte, clientId string) error {

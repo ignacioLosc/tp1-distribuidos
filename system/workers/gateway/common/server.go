@@ -99,14 +99,7 @@ func middlewareGatewayInit() (*mw.Middleware, error) {
 
 	middleware.DeclareDirectQueue(communication, "reviews")
 
-	middleware.DeclareExchange(communication, "results", "direct")
-	middleware.DeclareDirectQueue(communication, "query_results")
-
-	middleware.BindQueueToExchange(communication, "results", "query_results", "query1")
-	middleware.BindQueueToExchange(communication, "results", "query_results", "query2")
-	middleware.BindQueueToExchange(communication, "results", "query_results", "query3")
-	middleware.BindQueueToExchange(communication, "results", "query_results", "query4")
-	middleware.BindQueueToExchange(communication, "results", "query_results", "query5")
+	middleware.DeclareExchange(communication, "results", "topic")
 
 	return middleware, nil
 }

@@ -87,7 +87,7 @@ func (c *Sorter) middlewareInit() error {
 		return err
 	}
 
-	err = c.middleware.DeclareExchange(communication, results_exchange, "direct")
+	err = c.middleware.DeclareExchange(communication, results_exchange, "topic")
 	if err != nil {
 		log.Errorf("Error declaring results exchange")
 		return err
@@ -150,7 +150,7 @@ func (p *Sorter) sendResults(clientId string) {
 		gameBuffer := protocol.SerializeGame(&game)
 		gamesBuffer = append(gamesBuffer, gameBuffer...)
 	}
-	p.middleware.PublishInExchange(communication, results_exchange, query_key, gamesBuffer)
+	p.middleware.PublishInExchange(communication, results_exchange, clientId+"."+query_key, gamesBuffer)
 }
 
 func (p *Sorter) shouldKeep(game prot.Game, sortBy string, top int, clientId string) (bool, error) {
