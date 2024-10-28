@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -87,4 +89,14 @@ func GetRange(input string, r int) int {
 		v = -v
 	}
 	return v % r
+}
+
+
+func GenerateRandomID(length int) (string, error) {
+	bytes := make([]byte, length)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
 }

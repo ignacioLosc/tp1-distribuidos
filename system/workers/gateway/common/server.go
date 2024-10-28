@@ -104,7 +104,6 @@ func middlewareGatewayInit() (*mw.Middleware, error) {
 	return middleware, nil
 }
 
-
 type NetConnResponse struct {
 	Conn  net.Conn
 	Error error
@@ -120,8 +119,6 @@ func (s *Server) Start() {
 		log.Infof("received signal")
 		s.middleware.CtxCancel()
 	}()
-
-	go s.listenOnChannels()
 
 	connectionChan := make(chan NetConnResponse, 1)
 	go func() {
@@ -140,8 +137,13 @@ func (s *Server) Start() {
 		case <-s.middleware.Ctx.Done():
 			return
 		case connectionResult := <-connectionChan:
-			go s.receiveDatasets(connectionResult.Conn)
-			connectionResult.Error = s.waitForResults(connectionResult.Conn)
+			clientId, err := utils.GenerateRandomID(16)
+			if err != nil {
+				clientId = connectionResult.Conn.LocalAddr().String()
+			}
+			log.Infof("Client connected: %s", clientId)
+			go s.receiveDatasets(connectionResult.Conn, clientId)
+			connectionResult.Error = s.waitForResults(connectionResult.Conn, clientId)
 			if connectionResult.Error != nil {
 				log.Errorf("Error while receiving results: %v", connectionResult.Error)
 				continue
@@ -157,14 +159,18 @@ func (s *Server) signalListener(cancel context.CancelFunc) {
 	cancel()
 }
 
-func (s *Server) receiveDatasets(conn net.Conn) {
-	err := s.receiveMessage(conn, s.gamesChan)
+func (s *Server) receiveDatasets(conn net.Conn, clientId string) {
+	gamesChan := make(chan []byte)
+	reviewsChan := make(chan []byte)
+	go s.listenOnChannels(gamesChan, reviewsChan, clientId)
+
+	err := s.receiveMessage(conn, gamesChan)
 	if err != nil {
 		log.Criticalf("action: receiving_games | result: fail | err: %s", err)
 	}
 	log.Infof("action: receiving_games | result: success")
 
-	err = s.receiveMessage(conn, s.reviewsChan)
+	err = s.receiveMessage(conn, reviewsChan)
 	if err != nil {
 		log.Criticalf("action: receiving_reviews | result: fail | err: %s", err)
 	}
@@ -193,29 +199,22 @@ func (s *Server) receiveMessage(conn net.Conn, channel chan []byte) error {
 	}
 }
 
-func (s *Server) listenOnChannels() {
+func (s *Server) listenOnChannels(gamesChan chan []byte, reviewsChan chan []byte, clientId string) {
 	for {
 		select {
 		case <-s.middleware.Ctx.Done():
 			log.Infof("listenOnChannels returning")
 			return
-		case games := <-s.gamesChan:
+		case games := <-gamesChan:
 			s.middleware.PublishInQueue(communication, "games_to_filter", games)
 			if string(games) == "EOF" {
-				// err := s.middleware.PublishInExchange(control, "eof", "games", []byte("EOF"))
-				// if err != nil {
-				// 	log.Errorf("games Error sending EOF: %v", err)
-				// } else {
-				// 	log.Infof("games EOF sent")
-				// }
-
 				for i := 0; i < s.config.NumCounters; i++ {
 					s.middleware.PublishInQueue(communication, "games_to_count", []byte("EOF"))
 				}
 			} else {
 				s.middleware.PublishInQueue(communication, "games_to_count", games)
 			}
-		case review := <-s.reviewsChan:
+		case review := <-reviewsChan:
 			if string(review) == "EOF" {
 				for i := 0; i < s.config.NumMappers; i++ {
 					s.middleware.PublishInQueue(communication, "reviews", []byte("EOF"))

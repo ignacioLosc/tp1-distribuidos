@@ -9,7 +9,7 @@ import (
 	"example.com/system/communication/utils"
 )
 
-func (s *Server) waitForResults(conn net.Conn) error {
+func (s *Server) waitForResults(conn net.Conn, clientId string) error {
 	msgChan := make(chan middleware.MsgResponse)
 	id := "33"
 
