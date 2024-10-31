@@ -143,7 +143,7 @@ func (p *Sorter) sendResults(clientId string) {
 	games := p.gamesSavedMap[clientId]
 
 	gamesBuffer := make([]byte, 8)
-	l := len(p.gamesSavedMap)
+	l := len(games)
 	binary.BigEndian.PutUint64(gamesBuffer, uint64(l))
 
 	for _, game := range games {
@@ -172,7 +172,7 @@ func (p *Sorter) shouldKeep(game prot.Game, sortBy string, top int, clientId str
 func (p *Sorter) saveGame(game prot.Game, top int, clientId string) error {
 	games := p.gamesSavedMap[clientId]
 
-	if len(p.gamesSavedMap) < top {
+	if len(games) < top {
 		games = append(games, game)
 	} else {
 		games = games[1:]

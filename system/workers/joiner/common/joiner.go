@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"example.com/system/communication/middleware"
 	"example.com/system/communication/protocol"
@@ -216,6 +217,8 @@ func (j *Joiner) sendJoinedResults(clientId string) {
 
 		delete(j.savedGameReviewCountsMap[clientId], appId)
 	}
+
+	time.Sleep(10 * time.Second)
 
 	if j.config.Genre == "Indie" {
 		for i := 0; i < 5; i++ {
