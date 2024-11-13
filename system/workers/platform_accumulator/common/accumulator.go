@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"example.com/system/communication/middleware"
 	mw "example.com/system/communication/middleware"
@@ -21,6 +22,7 @@ const (
 	query_key        = "query1"
 	control          = "control"
 	communication    = "communication"
+	storage_file     = "/app/data"
 )
 
 type PlatformAccumulatorConfig struct {
@@ -33,7 +35,6 @@ type PlatformAccumulator struct {
 	middleware *mw.Middleware
 	countMap   map[string]prot.PlatformCount
 	finishedMap map[string]int
-	stop       chan bool
 }
 
 func NewPlatformAccumulator(config PlatformAccumulatorConfig) (*PlatformAccumulator, error) {
@@ -43,21 +44,20 @@ func NewPlatformAccumulator(config PlatformAccumulatorConfig) (*PlatformAccumula
 		return nil, err
 	}
 
-	platformCounter := &PlatformAccumulator{
-		config:     config,
-		stop:       make(chan bool),
-		countMap:   make(map[string]prot.PlatformCount),
-		middleware: middleware,
-		finishedMap:  make(map[string]int),
-	}
-
-	err = platformCounter.middlewareAccumulatorInit()
+	platformAccumulator, err := readFromFile(storage_file)
 	if err != nil {
 		return nil, err
 	}
 
-	platformCounter.middleware = middleware
-	return platformCounter, nil
+	platformAccumulator.config = config
+	platformAccumulator.middleware = middleware
+
+	err = platformAccumulator.middlewareAccumulatorInit()
+	if err != nil {
+		return nil, err
+	}
+
+	return &platformAccumulator, nil
 }
 
 func (p PlatformAccumulator) middlewareAccumulatorInit() error {
@@ -120,6 +120,7 @@ func (p *PlatformAccumulator) Start() {
 			if err != nil {
 				result.Msg.Nack(false, false)
 			} else {
+				saveToFile(storage_file, p)
 				result.Msg.Ack(false)
 			}
 		}
@@ -131,11 +132,11 @@ func (p *PlatformAccumulator) countGames(msg []byte, clientId string) error {
 	counterAccu := p.countMap[clientId]
 
 	if string(msg) == "EOF" {
-		log.Debugf("Received EOF")
+		log.Debug("Received EOF")
 		p.finishedMap[clientId] = p.finishedMap[clientId] + 1
 		if p.finishedMap[clientId] == p.config.NumCounters {
 			p.middleware.PublishInExchange(communication, results_exchange, clientId+"."+query_key, counterAccu.Serialize(), clientId)
-			p.countMap[clientId] = prot.PlatformCount{}
+			delete(p.countMap, clientId)
 		}
 		return nil
 	}

@@ -45,6 +45,9 @@ func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error) 
 	}
 
 	platformCounter, err := readFromFile(storage_file)
+	if err != nil {
+		return nil, err
+	}
 
 	platformCounter.config = config
 	platformCounter.middleware = middleware
