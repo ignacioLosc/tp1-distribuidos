@@ -21,6 +21,7 @@ const (
 	count_acumulator = "count_accumulator"
 	control          = "control"
 	communication    = "communication"
+	storage_file     = "/app/data"
 )
 
 type PlatformCounterConfig struct {
@@ -30,9 +31,10 @@ type PlatformCounterConfig struct {
 type PlatformCounter struct {
 	config          PlatformCounterConfig
 	middleware      *mw.Middleware
-	countMap		map[string]prot.PlatformCount
-	finishedMap		map[string]bool
+	countMap        map[string]prot.PlatformCount
+	finishedMap     map[string]bool
 	endOfGamesQueue string
+
 }
 
 func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error) {
@@ -42,12 +44,11 @@ func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error) 
 		return nil, err
 	}
 
-	platformCounter := &PlatformCounter{
-		config:     config,
-		middleware: middleware,
-		countMap: make(map[string]prot.PlatformCount),
-		finishedMap: make(map[string]bool),
-	}
+	platformCounter, err := readFromFile(storage_file)
+
+	platformCounter.config = config
+	platformCounter.middleware = middleware
+	log.Info("PlatformCounter initialized: ", platformCounter)
 
 	err = platformCounter.middlewareCounterInit()
 	if err != nil {
@@ -55,7 +56,7 @@ func NewPlatformCounter(config PlatformCounterConfig) (*PlatformCounter, error) 
 	}
 
 	platformCounter.middleware = middleware
-	return platformCounter, nil
+	return &platformCounter, nil
 }
 
 func (p PlatformCounter) middlewareCounterInit() error {
@@ -135,6 +136,7 @@ func (p *PlatformCounter) Start() {
 			if err != nil {
 				result.Msg.Nack(false, true)
 			} else {
+				saveToFile(storage_file, p)
 				result.Msg.Ack(false)
 			}
 		}
@@ -152,7 +154,7 @@ func (p *PlatformCounter) countGames(msg []byte, clientId string) error {
 		}
 
 		p.finishedMap[clientId] = true
-		p.countMap[clientId] = prot.PlatformCount{}
+		delete(p.countMap, clientId) 
 		return nil
 	}
 

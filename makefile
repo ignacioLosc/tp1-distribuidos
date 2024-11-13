@@ -6,7 +6,7 @@ up: compose
 .PHONY: run
 
 remove_old:
-	docker rmi `docker images --filter label=intermediateStageToBeDeleted=true -q`
+	docker rmi `docker images --filter "label=app=steam-analyzer" -q`
 
 down:
 	docker compose -f ${COMPOSE_FILE} stop -t 1
